@@ -3,20 +3,114 @@
   "project": "GYDS Miner (miner.zip)",
   "decision": "User chose in-browser mining: Lovable hosts the dashboard; hashing runs in the signed-in user's own browser tab via Web Workers only after they press Start.",
   "capabilities": [
-    {"capability": "code: dashboard UI (public/index.html, app.js, style.css)", "source": "Express static files", "outcome": "recreate as TanStack routes with the original dark/teal look", "status": "migrate", "next_action": "build dashboard route"},
-    {"capability": "code: hashing engine (worker.js, worker_threads)", "source": "Node worker_threads, sha256(prevHash+address+nonce) < target", "outcome": "recreate as browser Web Workers with identical hash rule; source merge conflicts resolved (batchSize + batchDelayMs version kept)", "status": "migrate", "next_action": "port worker"},
-    {"capability": "code: GYDS JSON-RPC client with multi-endpoint failover + CF Access headers", "source": "miner.js rpc()/callEndpoint()/probeEndpoint()", "outcome": "server function proxy so CF Access secrets never reach the browser; same failover order and error messages", "status": "migrate", "next_action": "build rpc server function"},
-    {"capability": "code: reconnect/circuit breaker, stall watchdog, share retry, 15s work poll", "source": "miner.js", "outcome": "recreate in browser mining engine", "status": "migrate", "next_action": "port engine"},
-    {"capability": "schema: config.json (wallet, mode, worker, threads, overclock, batch, delay, endpoints)", "source": "local JSON file", "outcome": "Lovable Cloud tables miner_settings + rpc_endpoints, per user", "status": "migrate", "next_action": "migration"},
-    {"capability": "schema: stats.json lifetime stats", "source": "local JSON file", "outcome": "Lovable Cloud table miner_stats per user", "status": "migrate", "next_action": "migration"},
-    {"capability": "records: config.json / stats.json values", "source": "bundled files", "outcome": "stats are all zero (nothing to import); wallet address and endpoints are re-entered by the user in Settings after sign-in; webPassword credential intentionally not imported", "status": "accepted", "next_action": "none"},
-    {"capability": "auth: single dashboard password (webPassword) + IP rate limit", "source": "miner.js requireAuth", "outcome": "replaced by Lovable Cloud email/password accounts; no user records existed", "status": "migrate", "next_action": "build sign-in"},
-    {"capability": "authorization", "source": "single operator", "outcome": "each account sees only its own settings/endpoints/stats (row-level security); CF secret column not readable from browser", "status": "migrate", "next_action": "RLS + column grants"},
-    {"capability": "public endpoint: /health", "source": "Express", "outcome": "no external caller detected; miner state now lives in the browser tab, so a server health probe has nothing to report", "status": "accepted", "next_action": "none"},
-    {"capability": "system stats (os.cpus, loadavg, memory, hostname)", "source": "Node os module", "outcome": "replaced with browser equivalents (navigator.hardwareConcurrency, device memory, platform)", "status": "migrate", "next_action": "port"},
-    {"capability": "activity log file (miner.log)", "source": "filesystem", "outcome": "in-tab activity log (last 300 lines)", "status": "migrate", "next_action": "port"},
-    {"capability": "always-on background mining / auto-start on boot", "source": "Replit workflow, systemd install.sh, PM2 ecosystem.config.js, Termux", "outcome": "not possible on Lovable hosting; mining runs only while the tab is open. Original files remain usable on Ubuntu/Termux outside Lovable", "status": "accepted", "next_action": "none"},
-    {"capability": "secrets", "source": "CF-Access-Client-Id/Secret per endpoint (user-entered), no env vars", "outcome": "stored per endpoint in Cloud, secret readable only server-side", "status": "migrate", "next_action": "none"},
-    {"capability": "verification", "source": "-", "outcome": "build, sign-in, settings save, endpoint test, start/stop mining", "status": "pending", "next_action": "run checks after build"}
+    {
+      "capability": "code: dashboard UI (public/index.html, app.js, style.css)",
+      "source": "Express static files",
+      "outcome": "recreate as TanStack routes with the original dark/teal look",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "code: hashing engine (worker.js, worker_threads)",
+      "source": "Node worker_threads, sha256(prevHash+address+nonce) < target",
+      "outcome": "recreate as browser Web Workers with identical hash rule; source merge conflicts resolved (batchSize + batchDelayMs version kept)",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "code: GYDS JSON-RPC client with multi-endpoint failover + CF Access headers",
+      "source": "miner.js rpc()/callEndpoint()/probeEndpoint()",
+      "outcome": "server function proxy so CF Access secrets never reach the browser; same failover order and error messages",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "code: reconnect/circuit breaker, stall watchdog, share retry, 15s work poll",
+      "source": "miner.js",
+      "outcome": "recreate in browser mining engine",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "schema: config.json (wallet, mode, worker, threads, overclock, batch, delay, endpoints)",
+      "source": "local JSON file",
+      "outcome": "Lovable Cloud tables miner_settings + rpc_endpoints, per user",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "schema: stats.json lifetime stats",
+      "source": "local JSON file",
+      "outcome": "Lovable Cloud table miner_stats per user",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "records: config.json / stats.json values",
+      "source": "bundled files",
+      "outcome": "stats are all zero (nothing to import); wallet address and endpoints are re-entered by the user in Settings after sign-in; webPassword credential intentionally not imported",
+      "status": "accepted",
+      "next_action": "none"
+    },
+    {
+      "capability": "auth: single dashboard password (webPassword) + IP rate limit",
+      "source": "miner.js requireAuth",
+      "outcome": "replaced by Lovable Cloud email/password accounts; no user records existed",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "authorization",
+      "source": "single operator",
+      "outcome": "each account sees only its own settings/endpoints/stats (row-level security); CF secret column not readable from browser",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "public endpoint: /health",
+      "source": "Express",
+      "outcome": "no external caller detected; miner state now lives in the browser tab, so a server health probe has nothing to report",
+      "status": "accepted",
+      "next_action": "none"
+    },
+    {
+      "capability": "system stats (os.cpus, loadavg, memory, hostname)",
+      "source": "Node os module",
+      "outcome": "replaced with browser equivalents (navigator.hardwareConcurrency, device memory, platform)",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "activity log file (miner.log)",
+      "source": "filesystem",
+      "outcome": "in-tab activity log (last 300 lines)",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "always-on background mining / auto-start on boot",
+      "source": "Replit workflow, systemd install.sh, PM2 ecosystem.config.js, Termux",
+      "outcome": "not possible on Lovable hosting; mining runs only while the tab is open. Original files remain usable on Ubuntu/Termux outside Lovable",
+      "status": "accepted",
+      "next_action": "none"
+    },
+    {
+      "capability": "secrets",
+      "source": "CF-Access-Client-Id/Secret per endpoint (user-entered), no env vars",
+      "outcome": "stored per endpoint in Cloud, secret readable only server-side",
+      "status": "implemented",
+      "next_action": "covered by verification row"
+    },
+    {
+      "capability": "verification",
+      "source": "-",
+      "outcome": "Verified: build OK, 7 unit tests (hash rule, share target, threads, back-off, URL checks), home + sign-in pages render, signed-out /dashboard redirects to sign-in, real browser hashing thread produced ~200k hashes/s and valid shares. Not yet verified: signed-in dashboard, settings save, live node connection.",
+      "status": "pending",
+      "next_action": "User creates an account; then mint a session and exercise dashboard + Start against a reachable node (current nodes need a Cloudflare Access service token)."
+    }
+  ],
+  "blockers": [
+    "No account exists yet to test the signed-in dashboard.",
+    "GYDS nodes rpc.nelifegy.com / netlifegy.com are behind Cloudflare Access; a CF service token per endpoint is needed to connect."
   ]
 }
