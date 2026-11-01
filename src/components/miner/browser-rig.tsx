@@ -161,7 +161,7 @@ export function BrowserRigProvider({ children }: { children: ReactNode }) {
         stats: {
           hashRate: s.hashRate, accepted: s.validShares, rejected: s.rejectedShares, reward: s.totalReward,
           uptime: s.startTime ? Math.floor((Date.now() - s.startTime) / 1000) : 0,
-          threads: s.effectiveThreads, blockHeight: s.blockHeight, pool: s.poolName ?? undefined,
+          threads: s.effectiveThreads, blockHeight: s.blockHeight, ...(s.poolName ? { pool: s.poolName } : {}),
           error: s.lastError, history: s.hashHistory.slice(-60).map((h) => h.hr),
         },
         log: s.log.slice(-60),
