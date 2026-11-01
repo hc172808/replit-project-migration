@@ -147,8 +147,8 @@ export function normaliseUsername(u: string): string {
   return u.trim().toLowerCase();
 }
 export function usernameEmail(u: string): string {
-  return `${normaliseUsername(u)}@users.gydsminer.app`;
+  return `${normaliseUsername(u)}@users.gydsminer.invalid`;
 }
 export function walletEmail(address: string): string {
-  return `${address.toLowerCase()}@wallets.gydsminer.app`;
+  return `${address.toLowerCase()}@wallets.gydsminer.invalid`;
 }
