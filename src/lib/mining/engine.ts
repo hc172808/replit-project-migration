@@ -62,7 +62,7 @@ export const MAX_RECONNECT_ATTEMPTS = 20;
 const RECONNECT_DELAYS = [5000, 15000, 30000, 60000, 120000, 300000];
 
 export function reconnectDelay(attempt: number): number {
-  return RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)];
+  return RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)]!;
 }
 
 export function computeEffectiveThreads(threads: number, overclock: number, cores: number): number {
@@ -141,6 +141,7 @@ export class MiningEngine {
         await new Promise((r) => setTimeout(r, 2000));
       }
     }
+    return undefined;
   }
 
   // ── Workers ────────────────────────────────────────────────────────────

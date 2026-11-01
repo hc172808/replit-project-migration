@@ -267,6 +267,7 @@ function Dashboard() {
               onMove={async (idx, dir) => {
                 const list = [...endpoints];
                 const [moved] = list.splice(idx, 1);
+                if (!moved) return;
                 list.splice(idx + dir, 0, moved);
                 try {
                   await Promise.all(list.map((e, i) => (e.position === i ? null : updateEndpoint(e.id, { position: i }))));

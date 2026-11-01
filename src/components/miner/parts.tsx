@@ -62,7 +62,8 @@ export function HashChart({ history }: { history: { ts: number; hr: number }[] }
     const offset = (120 - pts.length) * step;
     const coords = pts.map((p, i) => [offset + i * step, H - (p.hr / max) * (H - 10) - 4] as const);
     const path = coords.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-    const area = `${path} L${coords[coords.length - 1][0].toFixed(1)},${H} L${coords[0][0].toFixed(1)},${H} Z`;
+    const first = coords[0]!, last = coords[coords.length - 1]!;
+    const area = `${path} L${last[0].toFixed(1)},${H} L${first[0].toFixed(1)},${H} Z`;
     return { path, area, max };
   }, [pts]);
 
@@ -154,7 +155,7 @@ export function EndpointList({
   }
 
   async function submit() {
-    if (!draft.url.trim()) return toast.error("URL is required.");
+    if (!draft.url.trim()) { toast.error("URL is required."); return; }
     if (editing) {
       const patch: Partial<EpDraft> = { label: draft.label.trim() || "Node", url: draft.url.trim(), cf_client_id: draft.cf_client_id.trim() };
       if (draft.cf_client_secret) patch.cf_client_secret = draft.cf_client_secret;
@@ -245,10 +246,10 @@ export function MiningSettingsForm({ settings, cores, onSave }: { settings: Sett
         const overclock = Number(f.overclock);
         const batch = Math.floor(Number(f.batch_size));
         const delay = Math.floor(Number(f.batch_delay_ms));
-        if (!(threads >= 0 && threads <= 256)) return toast.error("Threads must be 0–256.");
-        if (!(overclock >= 0.5 && overclock <= 8)) return toast.error("Overclock must be between 0.5 and 8.");
-        if (!(batch >= 100)) return toast.error("Batch size must be at least 100.");
-        if (!(delay >= 0 && delay <= 60000)) return toast.error("Delay must be 0–60000 ms.");
+        if (!(threads >= 0 && threads <= 256)) { toast.error("Threads must be 0–256."); return; }
+        if (!(overclock >= 0.5 && overclock <= 8)) { toast.error("Overclock must be between 0.5 and 8."); return; }
+        if (!(batch >= 100)) { toast.error("Batch size must be at least 100."); return; }
+        if (!(delay >= 0 && delay <= 60000)) { toast.error("Delay must be 0–60000 ms."); return; }
         setBusy(true);
         try {
           await onSave({ worker_name: f.worker_name.trim() || "browser-rig", threads, overclock, batch_size: batch, batch_delay_ms: delay });

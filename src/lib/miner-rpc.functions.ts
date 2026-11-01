@@ -110,7 +110,7 @@ export const minerRpc = createServerFn({ method: "POST" })
     const start = data.preferredIdx % endpoints.length;
     for (let attempt = 0; attempt < endpoints.length; attempt++) {
       const idx = (start + attempt) % endpoints.length;
-      const ep = endpoints[idx];
+      const ep = endpoints[idx]!;
       try {
         const result = await callEndpoint(ep, data.method, data.params);
         if (attempt > 0) notes.push(`✓ Failover: now using "${ep.label}" (${ep.url})`);
