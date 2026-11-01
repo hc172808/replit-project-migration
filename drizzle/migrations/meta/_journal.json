@@ -8,6 +8,13 @@
       "when": 1793515612540,
       "tag": "0000_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793516402976,
+      "tag": "0001_fleet_assets_profiles",
+      "breakpoints": true
     }
   ]
 }
