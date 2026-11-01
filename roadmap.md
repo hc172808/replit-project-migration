@@ -1,0 +1,12 @@
+# Roadmap
+
+## Open
+- [ ] Multi-asset mining (not only GYDS): per-asset algorithm, pool/node, wallet — waiting on which coins
+- [ ] Rig fleet: control all rigs from one dashboard (start, stop, restart, speed/intensity, CPU/GPU overclock) — needs a rig agent on each server/PC/phone
+- [ ] Replace email sign-in with web3 wallet sign-in + username/password
+- [ ] `.env.example` for self-hosted rig setup (no real secrets committed)
+- [ ] Works well on phone and PC now; mobile app later
+- [ ] Verify signed-in dashboard end-to-end (blocked: needs a first account)
+
+## Done
+- [x] Replit GYDS miner migrated to in-browser mining with Lovable Cloud
