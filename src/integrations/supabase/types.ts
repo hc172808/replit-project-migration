@@ -14,13 +14,126 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      miner_settings: {
+        Row: {
+          batch_delay_ms: number
+          batch_size: number
+          mining_mode: string
+          overclock: number
+          threads: number
+          updated_at: string
+          user_id: string
+          wallet_address: string
+          worker_name: string
+        }
+        Insert: {
+          batch_delay_ms?: number
+          batch_size?: number
+          mining_mode?: string
+          overclock?: number
+          threads?: number
+          updated_at?: string
+          user_id: string
+          wallet_address?: string
+          worker_name?: string
+        }
+        Update: {
+          batch_delay_ms?: number
+          batch_size?: number
+          mining_mode?: string
+          overclock?: number
+          threads?: number
+          updated_at?: string
+          user_id?: string
+          wallet_address?: string
+          worker_name?: string
+        }
+        Relationships: []
+      }
+      miner_stats: {
+        Row: {
+          first_started: string | null
+          last_updated: string | null
+          lifetime_mining_seconds: number
+          lifetime_rejected: number
+          lifetime_reward: number
+          lifetime_shares: number
+          total_sessions: number
+          user_id: string
+        }
+        Insert: {
+          first_started?: string | null
+          last_updated?: string | null
+          lifetime_mining_seconds?: number
+          lifetime_rejected?: number
+          lifetime_reward?: number
+          lifetime_shares?: number
+          total_sessions?: number
+          user_id: string
+        }
+        Update: {
+          first_started?: string | null
+          last_updated?: string | null
+          lifetime_mining_seconds?: number
+          lifetime_rejected?: number
+          lifetime_reward?: number
+          lifetime_shares?: number
+          total_sessions?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rpc_endpoints: {
+        Row: {
+          cf_client_id: string
+          cf_client_secret: string
+          created_at: string
+          has_cf_secret: boolean | null
+          id: string
+          label: string
+          position: number
+          url: string
+          user_id: string
+        }
+        Insert: {
+          cf_client_id?: string
+          cf_client_secret?: string
+          created_at?: string
+          has_cf_secret?: boolean | null
+          id?: string
+          label?: string
+          position?: number
+          url: string
+          user_id: string
+        }
+        Update: {
+          cf_client_id?: string
+          cf_client_secret?: string
+          created_at?: string
+          has_cf_secret?: boolean | null
+          id?: string
+          label?: string
+          position?: number
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      record_miner_stats: {
+        Args: {
+          _new_session?: boolean
+          _rejected?: number
+          _reward?: number
+          _seconds?: number
+          _shares?: number
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
