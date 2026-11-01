@@ -23,12 +23,13 @@ type Endpoint = {
   cf_client_secret: string;
 };
 
-async function loadEndpoints(userId: string): Promise<Endpoint[]> {
+async function loadEndpoints(userId: string, profileId: string): Promise<Endpoint[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("rpc_endpoints")
     .select("id, label, url, cf_client_id, cf_client_secret")
     .eq("user_id", userId)
+    .eq("profile_id", profileId)
     .order("position", { ascending: true })
     .order("created_at", { ascending: true })
     .limit(10);
@@ -92,15 +93,16 @@ export const minerRpc = createServerFn({ method: "POST" })
         method: z.enum(ALLOWED_METHODS),
         params: z.record(z.string(), z.unknown()),
         preferredIdx: z.number().int().min(0).max(100),
+        profileId: z.string().uuid(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const endpoints = await loadEndpoints(context.userId);
+    const endpoints = await loadEndpoints(context.userId, data.profileId);
     if (!endpoints.length) {
       return {
         ok: false as const,
-        error: "No RPC endpoints configured. Add one in Wallet Settings.",
+        error: "No node endpoints in this profile. Add one under Profiles.",
         notes: [] as string[],
         activeIdx: 0,
       };
@@ -169,9 +171,9 @@ async function probeEndpoint(ep: Endpoint) {
 
 export const testRpcEndpoints = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ id: z.string().uuid().optional() }).parse(input))
+  .inputValidator((input) => z.object({ profileId: z.string().uuid(), id: z.string().uuid().optional() }).parse(input))
   .handler(async ({ data, context }) => {
-    const all = await loadEndpoints(context.userId);
+    const all = await loadEndpoints(context.userId, data.profileId);
     const targets = data.id ? all.filter((e) => e.id === data.id) : all;
     const results: { id: string; label: string; url: string; ok: boolean; latency: number; error: string | null }[] = [];
     for (let i = 0; i < targets.length; i += 5) {

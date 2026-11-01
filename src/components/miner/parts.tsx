@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { EndpointRow, Settings } from "@/lib/miner-data";
+import type { EndpointRow } from "@/lib/miner-data";
 
 export function fmtHash(h: number) {
   if (h >= 1e9) return `${(h / 1e9).toFixed(2)} GH/s`;
@@ -52,8 +52,8 @@ export function Stat({ label, value, tone = "signal" }: { label: string; value: 
   );
 }
 
-export function HashChart({ history }: { history: { ts: number; hr: number }[] }) {
-  const pts = history.slice(-120);
+export function HashChart({ history }: { history: { ts: number; hr: number }[] | number[] }) {
+  const pts = (history as ({ ts: number; hr: number } | number)[]).slice(-120).map((h) => (typeof h === "number" ? { ts: 0, hr: h } : h));
   const { path, area, max } = useMemo(() => {
     const W = 600, H = 140;
     const max = Math.max(1, ...pts.map((p) => p.hr));
@@ -85,48 +85,6 @@ export function HashChart({ history }: { history: { ts: number; hr: number }[] }
         <span>now</span>
       </div>
     </div>
-  );
-}
-
-export function WalletForm({ settings, onSave }: { settings: Settings; onSave: (p: Partial<Settings>) => Promise<void> }) {
-  const [wallet, setWallet] = useState(settings.wallet_address);
-  const [mode, setMode] = useState<"pool" | "solo">(settings.mining_mode);
-  const [busy, setBusy] = useState(false);
-  return (
-    <form
-      className="space-y-4"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        try { await onSave({ wallet_address: wallet.trim(), mining_mode: mode }); } finally { setBusy(false); }
-      }}
-    >
-      <div className="space-y-1.5">
-        <Label htmlFor="wallet">Wallet address</Label>
-        <Input id="wallet" className="font-mono" placeholder="0x…" value={wallet} onChange={(e) => setWallet(e.target.value)} />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {([
-          { v: "pool", t: "Pool mining", d: "Join a pool — share rewards, steady income" },
-          { v: "solo", t: "Solo mining", d: "Mine alone — rare but full block reward" },
-        ] as const).map((o) => (
-          <button
-            type="button"
-            key={o.v}
-            onClick={() => setMode(o.v)}
-            className={cn(
-              "rounded-lg border p-3 text-left transition-colors",
-              mode === o.v ? "border-primary bg-accent" : "border-border hover:border-primary/50",
-            )}
-            aria-pressed={mode === o.v}
-          >
-            <p className="font-semibold">{o.t}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{o.d}</p>
-          </button>
-        ))}
-      </div>
-      <Button type="submit" disabled={busy}>Save wallet settings</Button>
-    </form>
   );
 }
 
@@ -221,49 +179,3 @@ export function EndpointList({
   );
 }
 
-export function MiningSettingsForm({ settings, cores, onSave }: { settings: Settings; cores: number; onSave: (p: Partial<Settings>) => Promise<void> }) {
-  const [f, setF] = useState({
-    worker_name: settings.worker_name,
-    threads: String(settings.threads),
-    overclock: String(settings.overclock),
-    batch_size: String(settings.batch_size),
-    batch_delay_ms: String(settings.batch_delay_ms),
-  });
-  const [busy, setBusy] = useState(false);
-  const field = (k: keyof typeof f, label: string, hint?: string, mono = true) => (
-    <div className="space-y-1.5">
-      <Label htmlFor={k}>{label}</Label>
-      <Input id={k} className={mono ? "font-mono" : ""} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-  return (
-    <form
-      className="space-y-4"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const threads = Math.floor(Number(f.threads));
-        const overclock = Number(f.overclock);
-        const batch = Math.floor(Number(f.batch_size));
-        const delay = Math.floor(Number(f.batch_delay_ms));
-        if (!(threads >= 0 && threads <= 256)) { toast.error("Threads must be 0–256."); return; }
-        if (!(overclock >= 0.5 && overclock <= 8)) { toast.error("Overclock must be between 0.5 and 8."); return; }
-        if (!(batch >= 100)) { toast.error("Batch size must be at least 100."); return; }
-        if (!(delay >= 0 && delay <= 60000)) { toast.error("Delay must be 0–60000 ms."); return; }
-        setBusy(true);
-        try {
-          await onSave({ worker_name: f.worker_name.trim() || "browser-rig", threads, overclock, batch_size: batch, batch_delay_ms: delay });
-        } finally { setBusy(false); }
-      }}
-    >
-      <div className="grid gap-3 sm:grid-cols-2">
-        {field("worker_name", "Worker name", undefined, false)}
-        {field("threads", "Threads (0 = auto)", `This device has ${cores} cores.`)}
-        {field("overclock", "Overclock multiplier", "Threads × this value. Too high can slow hashing.")}
-        {field("batch_size", "Batch size", "Hashes per thread tick (default 20000).")}
-        {field("batch_delay_ms", "CPU throttle delay (ms)", "Pause between batches. 0 = full speed.")}
-      </div>
-      <Button type="submit" disabled={busy}>Save settings</Button>
-    </form>
-  );
-}

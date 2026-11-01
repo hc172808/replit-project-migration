@@ -3,6 +3,7 @@
 ## Open
 - [ ] Multi-asset mining (not only GYDS): per-asset algorithm, pool/node, wallet — waiting on which coins
 - [ ] Rig fleet: control all rigs from one dashboard (start, stop, restart, speed/intensity, CPU/GPU overclock) — needs a rig agent on each server/PC/phone
+- [ ] Rig program auto-detects CPUs and GPUs (NVIDIA/AMD/Intel) on setup and reports them to the dashboard
 - [ ] Replace email sign-in with web3 wallet sign-in + username/password
 - [ ] `.env.example` for self-hosted rig setup (no real secrets committed)
 - [ ] Works well on phone and PC now; mobile app later
