@@ -14,6 +14,8 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard.index'
+import { Route as AuthenticatedDashboardRigsRigIdRouteImport } from './routes/_authenticated/dashboard.rigs.$rigId'
 import { Route as ApiPublicRigHeartbeatRouteImport } from './routes/api/public/rig/heartbeat'
 
 const IndexRoute = IndexRouteImport.update({
@@ -40,6 +42,18 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDashboardIndexRoute =
+  AuthenticatedDashboardIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedDashboardRoute,
+  } as any)
+const AuthenticatedDashboardRigsRigIdRoute =
+  AuthenticatedDashboardRigsRigIdRouteImport.update({
+    id: '/rigs/$rigId',
+    path: '/rigs/$rigId',
+    getParentRoute: () => AuthenticatedDashboardRoute,
+  } as any)
 const ApiPublicRigHeartbeatRoute = ApiPublicRigHeartbeatRouteImport.update({
   id: '/api/public/rig/heartbeat',
   path: '/api/public/rig/heartbeat',
@@ -50,14 +64,17 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/dashboard': typeof AuthenticatedDashboardRouteWithChildren
+  '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/dashboard/rigs/$rigId': typeof AuthenticatedDashboardRigsRigIdRoute
   '/api/public/rig/heartbeat': typeof ApiPublicRigHeartbeatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/dashboard/rigs/$rigId': typeof AuthenticatedDashboardRigsRigIdRoute
   '/api/public/rig/heartbeat': typeof ApiPublicRigHeartbeatRoute
 }
 export interface FileRoutesById {
@@ -66,7 +83,9 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRouteWithChildren
+  '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/dashboard/rigs/$rigId': typeof AuthenticatedDashboardRigsRigIdRoute
   '/api/public/rig/heartbeat': typeof ApiPublicRigHeartbeatRoute
 }
 export interface FileRouteTypes {
@@ -76,6 +95,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/dashboard'
+    | '/dashboard/'
+    | '/dashboard/rigs/$rigId'
     | '/api/public/rig/heartbeat'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -83,6 +104,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/dashboard'
+    | '/dashboard/rigs/$rigId'
     | '/api/public/rig/heartbeat'
   id:
     | '__root__'
@@ -91,6 +113,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/_authenticated/dashboard'
+    | '/_authenticated/dashboard/'
+    | '/_authenticated/dashboard/rigs/$rigId'
     | '/api/public/rig/heartbeat'
   fileRoutesById: FileRoutesById
 }
@@ -139,6 +163,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/dashboard/': {
+      id: '/_authenticated/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof AuthenticatedDashboardIndexRouteImport
+      parentRoute: typeof AuthenticatedDashboardRoute
+    }
+    '/_authenticated/dashboard/rigs/$rigId': {
+      id: '/_authenticated/dashboard/rigs/$rigId'
+      path: '/rigs/$rigId'
+      fullPath: '/dashboard/rigs/$rigId'
+      preLoaderRoute: typeof AuthenticatedDashboardRigsRigIdRouteImport
+      parentRoute: typeof AuthenticatedDashboardRoute
+    }
     '/api/public/rig/heartbeat': {
       id: '/api/public/rig/heartbeat'
       path: '/api/public/rig/heartbeat'
@@ -149,12 +187,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedDashboardRouteChildren {
+  AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+  AuthenticatedDashboardRigsRigIdRoute: typeof AuthenticatedDashboardRigsRigIdRoute
+}
+
+const AuthenticatedDashboardRouteChildren: AuthenticatedDashboardRouteChildren =
+  {
+    AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+    AuthenticatedDashboardRigsRigIdRoute: AuthenticatedDashboardRigsRigIdRoute,
+  }
+
+const AuthenticatedDashboardRouteWithChildren =
+  AuthenticatedDashboardRoute._addFileChildren(
+    AuthenticatedDashboardRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRouteWithChildren
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRouteWithChildren,
 }
 
 const AuthenticatedRouteRouteWithChildren =
