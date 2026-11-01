@@ -386,6 +386,6 @@ export class MiningEngine {
     this.stopWorkers();
     if (this.state.running) this.flushSeconds();
     this.state.running = false;
-    this.listeners.clear();
+
   }
 }
