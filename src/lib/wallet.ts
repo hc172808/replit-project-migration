@@ -22,7 +22,7 @@ export async function connectWallet(kind: WalletKind): Promise<{ address: string
     if (!eth) throw new Error("No browser wallet found. Install MetaMask, or use WalletConnect for a phone wallet.");
     provider = eth;
   } else {
-    const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string | undefined;
+    const projectId = import.meta.env["VITE_WALLETCONNECT_PROJECT_ID"] as string | undefined;
     if (!projectId) throw new Error("WalletConnect isn't set up yet — a WalletConnect project ID is needed.");
     const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
     const wc = await EthereumProvider.init({
