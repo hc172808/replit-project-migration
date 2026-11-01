@@ -5,6 +5,7 @@
 // only after the user presses Start, and only while the tab stays open.
 
 export type MinerConfig = {
+  profileId: string;
   walletAddress: string;
   miningMode: "pool" | "solo";
   workerName: string;
@@ -18,6 +19,7 @@ export type RpcCaller = (
   method: string,
   params: Record<string, unknown>,
   preferredIdx: number,
+  profileId: string,
 ) => Promise<
   | { ok: true; resultJson: string; activeIdx: number; activeEndpointId: string; notes: string[] }
   | { ok: false; error: string; notes: string[]; activeIdx: number }
@@ -54,6 +56,7 @@ export type MinerState = {
   activeEndpointIdx: number;
   activeEndpointId: string | null;
   effectiveThreads: number;
+  profileId: string | null;
 };
 
 type Job = { jobId: string; prevBlockHash: string; target: string; nonceStart: string; blockHeight?: number; difficulty?: number };
@@ -78,7 +81,7 @@ function initialState(): MinerState {
     sessionId: null, poolName: null, hashRate: 0, hashHistory: [],
     validShares: 0, rejectedShares: 0, totalReward: 0,
     currentDifficulty: null, blockHeight: 0, startTime: null, lastError: null, log: [],
-    activeEndpointIdx: 0, activeEndpointId: null, effectiveThreads: 0,
+    activeEndpointIdx: 0, activeEndpointId: null, effectiveThreads: 0, profileId: null,
   };
 }
 
@@ -123,7 +126,7 @@ export class MiningEngine {
   }
 
   private async rpc<T = unknown>(method: string, params: Record<string, unknown>): Promise<T> {
-    const r = await this.rpcCaller(method, params, this.state.activeEndpointIdx);
+    const r = await this.rpcCaller(method, params, this.state.activeEndpointIdx, this.config!.profileId);
     for (const n of r.notes) this.pushLog(n);
     this.state.activeEndpointIdx = r.activeIdx;
     if (!r.ok) throw new Error(r.error);
@@ -300,6 +303,8 @@ export class MiningEngine {
     if (!config.walletAddress) return { ok: false, message: "Set your GYDS wallet address in Wallet Settings first." };
 
     this.config = config;
+    this.state.profileId = config.profileId;
+    this.state.activeEndpointIdx = 0;
     this.state.actionInProgress = true; this.state.circuitOpen = false;
     this.cancelReconnect();
     this.emit();
