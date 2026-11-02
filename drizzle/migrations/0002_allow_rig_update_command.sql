@@ -1,0 +1,2 @@
+ALTER TABLE public.rig_commands DROP CONSTRAINT rig_commands_command_check;
+ALTER TABLE public.rig_commands ADD CONSTRAINT rig_commands_command_check CHECK (command = ANY (ARRAY['start','stop','restart','apply_tuning','set_profile','update']));
