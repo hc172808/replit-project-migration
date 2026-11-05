@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Cpu, Layers, UserRound } from "lucide-react";
+import { Activity, Cpu, Layers, UserRound } from "lucide-react";
+import { AppUpdateNotice } from "@/components/AppUpdateNotice";
 import { BrandMark } from "@/components/BrandMark";
 import { BrowserRigProvider } from "@/components/miner/browser-rig";
 import { profilesQuery } from "@/lib/miner-data";
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 const tabs = [
   { to: "/dashboard", label: "Rigs", icon: Cpu, exact: true },
+  { to: "/dashboard/health", label: "Health", icon: Activity, exact: false },
   { to: "/dashboard/profiles", label: "Coins & pools", icon: Layers, exact: false },
   { to: "/dashboard/account", label: "Account", icon: UserRound, exact: false },
 ] as const;
@@ -41,6 +43,7 @@ function DashboardLayout() {
             ))}
           </ul>
         </nav>
+        <AppUpdateNotice />
         <Outlet />
       </div>
     </BrowserRigProvider>

@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut } from "lucide-react";
+import { LogOut, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/miner/parts";
@@ -41,7 +41,10 @@ function Account() {
         <div><dt className="text-xs text-muted-foreground">Username</dt><dd className="font-mono">{data?.username ?? "—"}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Wallet</dt><dd className="break-all font-mono">{data?.wallet_address ?? "—"}</dd></div>
       </dl>
-      <Button className="mt-5" variant="outline" onClick={signOut}><LogOut /> Sign out</Button>
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Button asChild variant="secondary"><Link to="/install"><Smartphone /> Install on your phone</Link></Button>
+        <Button variant="outline" onClick={signOut}><LogOut /> Sign out</Button>
+      </div>
     </Section>
   );
 }

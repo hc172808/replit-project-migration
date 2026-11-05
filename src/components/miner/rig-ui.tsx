@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Copy } from "lucide-react";
+import { Copy, Download } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { clampTuning, isRigOnline, TUNING_LIMITS, type Tuning } from "@/lib/assets";
-import type { MiningProfile, Rig } from "@/lib/miner-data";
+import { sendRigCommand, type MiningProfile, type Rig } from "@/lib/miner-data";
+import { RIG_AGENT_VERSION, rigUpdateStatus } from "@/lib/rig-agent-version";
 import { createAgentRig } from "@/lib/rigs.functions";
 
 export type RigView = { online: boolean; label: string; tone: "on" | "off" | "warn" | "danger" };
@@ -37,6 +38,50 @@ export function StatusPill({ view }: { view: RigView }) {
       <span className={cn("h-1.5 w-1.5 rounded-full bg-current", view.tone === "on" && "animate-pulse-dot")} />
       {view.label}
     </span>
+  );
+}
+
+/** "Update available" / "Up to date" label for rig-program rigs. Renders nothing for browser rigs. */
+export function UpdateBadge({ rig }: { rig: Pick<Rig, "kind" | "agent_version"> }) {
+  const s = rigUpdateStatus(rig);
+  if (s === "not-applicable" || s === "unknown") return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+        s === "outdated" ? "bg-muted text-warning" : "bg-muted text-muted-foreground",
+      )}
+      title={`Rig v${rig.agent_version} · newest v${RIG_AGENT_VERSION}`}
+    >
+      {s === "outdated" ? `Update available · v${RIG_AGENT_VERSION}` : `v${rig.agent_version} up to date`}
+    </span>
+  );
+}
+
+/** Sends the "update" command; the rig downloads the newest program and restarts itself. */
+export function UpdateButton({ rig, size, onSent }: { rig: Pick<Rig, "id" | "name" | "kind" | "agent_version">; size?: "sm" | "default"; onSent?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  if (rigUpdateStatus(rig) !== "outdated") return null;
+  return (
+    <Button
+      size={size}
+      variant="outline"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await sendRigCommand(rig.id, "update");
+          toast.success(`Update sent to ${rig.name} — it restarts on v${RIG_AGENT_VERSION} within ~10 seconds`);
+          onSent?.();
+        } catch (e) {
+          toast.error((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Download /> Update
+    </Button>
   );
 }
 

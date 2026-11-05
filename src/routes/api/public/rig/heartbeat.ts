@@ -5,6 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { sha256Hex } from "@/lib/rig-token";
 import { clampTuning } from "@/lib/assets";
+import { RIG_AGENT_VERSION } from "@/lib/rig-agent-version";
 
 const Body = z.object({
   hostname: z.string().max(200).default(""),
@@ -107,6 +108,7 @@ export const Route = createFileRoute("/api/public/rig/heartbeat")({
             rig: { id: rig.id, name: rig.name, desiredState: rig.desired_state, tuning: clampTuning((rig.tuning ?? {}) as Record<string, unknown>) },
             profile,
             commands: commands ?? [],
+            latestAgentVersion: RIG_AGENT_VERSION,
             pollSeconds: 10,
           },
           { headers: { "Cache-Control": "no-store" } },

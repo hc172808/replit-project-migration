@@ -221,7 +221,7 @@ export async function deleteRig(id: string) {
   if (error) throw error;
 }
 
-export async function sendRigCommand(rigId: string, command: "start" | "stop" | "restart" | "apply_tuning" | "set_profile", payload: Record<string, unknown> = {}) {
+export async function sendRigCommand(rigId: string, command: "start" | "stop" | "restart" | "apply_tuning" | "set_profile" | "update", payload: Record<string, unknown> = {}) {
   const userId = await requireUserId();
   const { error } = await supabase.from("rig_commands").insert({ rig_id: rigId, user_id: userId, command, payload: payload as never });
   if (error) throw error;

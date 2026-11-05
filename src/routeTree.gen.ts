@@ -12,11 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as InstallRouteImport } from './routes/install'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard.index'
 import { Route as AuthenticatedDashboardAccountRouteImport } from './routes/_authenticated/dashboard.account'
+import { Route as AuthenticatedDashboardHealthRouteImport } from './routes/_authenticated/dashboard.health'
 import { Route as AuthenticatedDashboardProfilesRouteImport } from './routes/_authenticated/dashboard.profiles'
+import { Route as ApiPublicAppVersionRouteImport } from './routes/api/public/app-version'
 import { Route as AuthenticatedDashboardRigsRigIdRouteImport } from './routes/_authenticated/dashboard.rigs.$rigId'
 import { Route as ApiPublicRigHeartbeatRouteImport } from './routes/api/public/rig/heartbeat'
 
@@ -32,6 +35,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InstallRoute = InstallRouteImport.update({
+  id: '/install',
+  path: '/install',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -56,12 +64,23 @@ const AuthenticatedDashboardAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedDashboardRoute,
   } as any)
+const AuthenticatedDashboardHealthRoute =
+  AuthenticatedDashboardHealthRouteImport.update({
+    id: '/health',
+    path: '/health',
+    getParentRoute: () => AuthenticatedDashboardRoute,
+  } as any)
 const AuthenticatedDashboardProfilesRoute =
   AuthenticatedDashboardProfilesRouteImport.update({
     id: '/profiles',
     path: '/profiles',
     getParentRoute: () => AuthenticatedDashboardRoute,
   } as any)
+const ApiPublicAppVersionRoute = ApiPublicAppVersionRouteImport.update({
+  id: '/api/public/app-version',
+  path: '/api/public/app-version',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedDashboardRigsRigIdRoute =
   AuthenticatedDashboardRigsRigIdRouteImport.update({
     id: '/rigs/$rigId',
@@ -77,10 +96,13 @@ const ApiPublicRigHeartbeatRoute = ApiPublicRigHeartbeatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/install': typeof InstallRoute
   '/reset-password': typeof ResetPasswordRoute
   '/dashboard': typeof AuthenticatedDashboardRouteWithChildren
   '/dashboard/account': typeof AuthenticatedDashboardAccountRoute
+  '/dashboard/health': typeof AuthenticatedDashboardHealthRoute
   '/dashboard/profiles': typeof AuthenticatedDashboardProfilesRoute
+  '/api/public/app-version': typeof ApiPublicAppVersionRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/dashboard/rigs/$rigId': typeof AuthenticatedDashboardRigsRigIdRoute
   '/api/public/rig/heartbeat': typeof ApiPublicRigHeartbeatRoute
@@ -88,9 +110,12 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/install': typeof InstallRoute
   '/reset-password': typeof ResetPasswordRoute
   '/dashboard/account': typeof AuthenticatedDashboardAccountRoute
+  '/dashboard/health': typeof AuthenticatedDashboardHealthRoute
   '/dashboard/profiles': typeof AuthenticatedDashboardProfilesRoute
+  '/api/public/app-version': typeof ApiPublicAppVersionRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/dashboard/rigs/$rigId': typeof AuthenticatedDashboardRigsRigIdRoute
   '/api/public/rig/heartbeat': typeof ApiPublicRigHeartbeatRoute
@@ -100,10 +125,13 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/install': typeof InstallRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRouteWithChildren
   '/_authenticated/dashboard/account': typeof AuthenticatedDashboardAccountRoute
+  '/_authenticated/dashboard/health': typeof AuthenticatedDashboardHealthRoute
   '/_authenticated/dashboard/profiles': typeof AuthenticatedDashboardProfilesRoute
+  '/api/public/app-version': typeof ApiPublicAppVersionRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/dashboard/rigs/$rigId': typeof AuthenticatedDashboardRigsRigIdRoute
   '/api/public/rig/heartbeat': typeof ApiPublicRigHeartbeatRoute
@@ -113,10 +141,13 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/install'
     | '/reset-password'
     | '/dashboard'
     | '/dashboard/account'
+    | '/dashboard/health'
     | '/dashboard/profiles'
+    | '/api/public/app-version'
     | '/dashboard/'
     | '/dashboard/rigs/$rigId'
     | '/api/public/rig/heartbeat'
@@ -124,9 +155,12 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/install'
     | '/reset-password'
     | '/dashboard/account'
+    | '/dashboard/health'
     | '/dashboard/profiles'
+    | '/api/public/app-version'
     | '/dashboard'
     | '/dashboard/rigs/$rigId'
     | '/api/public/rig/heartbeat'
@@ -135,10 +169,13 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/install'
     | '/reset-password'
     | '/_authenticated/dashboard'
     | '/_authenticated/dashboard/account'
+    | '/_authenticated/dashboard/health'
     | '/_authenticated/dashboard/profiles'
+    | '/api/public/app-version'
     | '/_authenticated/dashboard/'
     | '/_authenticated/dashboard/rigs/$rigId'
     | '/api/public/rig/heartbeat'
@@ -148,7 +185,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  InstallRoute: typeof InstallRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiPublicAppVersionRoute: typeof ApiPublicAppVersionRoute
   ApiPublicRigHeartbeatRoute: typeof ApiPublicRigHeartbeatRoute
 }
 
@@ -173,6 +212,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/install': {
+      id: '/install'
+      path: '/install'
+      fullPath: '/install'
+      preLoaderRoute: typeof InstallRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -203,12 +249,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardAccountRouteImport
       parentRoute: typeof AuthenticatedDashboardRoute
     }
+    '/_authenticated/dashboard/health': {
+      id: '/_authenticated/dashboard/health'
+      path: '/health'
+      fullPath: '/dashboard/health'
+      preLoaderRoute: typeof AuthenticatedDashboardHealthRouteImport
+      parentRoute: typeof AuthenticatedDashboardRoute
+    }
     '/_authenticated/dashboard/profiles': {
       id: '/_authenticated/dashboard/profiles'
       path: '/profiles'
       fullPath: '/dashboard/profiles'
       preLoaderRoute: typeof AuthenticatedDashboardProfilesRouteImport
       parentRoute: typeof AuthenticatedDashboardRoute
+    }
+    '/api/public/app-version': {
+      id: '/api/public/app-version'
+      path: '/api/public/app-version'
+      fullPath: '/api/public/app-version'
+      preLoaderRoute: typeof ApiPublicAppVersionRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/dashboard/rigs/$rigId': {
       id: '/_authenticated/dashboard/rigs/$rigId'
@@ -229,6 +289,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedDashboardRouteChildren {
   AuthenticatedDashboardAccountRoute: typeof AuthenticatedDashboardAccountRoute
+  AuthenticatedDashboardHealthRoute: typeof AuthenticatedDashboardHealthRoute
   AuthenticatedDashboardProfilesRoute: typeof AuthenticatedDashboardProfilesRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedDashboardRigsRigIdRoute: typeof AuthenticatedDashboardRigsRigIdRoute
@@ -237,6 +298,7 @@ interface AuthenticatedDashboardRouteChildren {
 const AuthenticatedDashboardRouteChildren: AuthenticatedDashboardRouteChildren =
   {
     AuthenticatedDashboardAccountRoute: AuthenticatedDashboardAccountRoute,
+    AuthenticatedDashboardHealthRoute: AuthenticatedDashboardHealthRoute,
     AuthenticatedDashboardProfilesRoute: AuthenticatedDashboardProfilesRoute,
     AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
     AuthenticatedDashboardRigsRigIdRoute: AuthenticatedDashboardRigsRigIdRoute,
@@ -262,7 +324,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  InstallRoute: InstallRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiPublicAppVersionRoute: ApiPublicAppVersionRoute,
   ApiPublicRigHeartbeatRoute: ApiPublicRigHeartbeatRoute,
 }
 export const routeTree = rootRouteImport

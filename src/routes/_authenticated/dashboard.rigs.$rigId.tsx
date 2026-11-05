@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Section, Stat, HashChart, fmtHash, fmtDuration } from "@/components/miner/parts";
-import { StatusPill, TuningForm, SetupInstructions, rigView } from "@/components/miner/rig-ui";
+import { StatusPill, TuningForm, SetupInstructions, UpdateBadge, UpdateButton, rigView } from "@/components/miner/rig-ui";
 import { useBrowserRig } from "@/components/miner/browser-rig";
 import { assetFor, type Tuning } from "@/lib/assets";
 import {
@@ -124,10 +124,12 @@ function RigDetail() {
           {[rig.platform, rig.hostname, rig.agent_version && `v${rig.agent_version}`].filter(Boolean).join(" · ") || "Waiting for the rig to connect…"}
           {rig.last_seen_at && !isThis && ` · last seen ${new Date(rig.last_seen_at).toLocaleTimeString()}`}
         </p>
+        <div className="mt-2"><UpdateBadge rig={rig} /></div>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button variant="glow" onClick={() => act("start")} disabled={running}><Play /> Start</Button>
           <Button variant="secondary" onClick={() => act("restart")}><RotateCw /> Restart</Button>
           <Button variant="destructive" onClick={() => act("stop")} disabled={!running}><Square /> Stop</Button>
+          <UpdateButton rig={rig} onSent={refresh} />
         </div>
         {s.error && <p className="mt-3 rounded-lg border border-destructive/40 bg-inset p-3 text-sm text-destructive">{s.error}</p>}
         {isThis && (

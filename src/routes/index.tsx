@@ -50,6 +50,9 @@ function Index() {
             <Link to="/auth">Sign in to start</Link>
           </Button>
         )}
+        <Button asChild variant="outline" size="lg">
+          <Link to="/install">Install on your phone</Link>
+        </Button>
       </div>
 
       <ul className="mt-14 grid gap-3 sm:grid-cols-3">

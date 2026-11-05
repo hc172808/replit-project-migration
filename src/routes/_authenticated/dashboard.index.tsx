@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Play, Plus, RotateCw, Square, ChevronRight, Thermometer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Section, Stat, fmtHash } from "@/components/miner/parts";
-import { AddRigDialog, StatusPill, rigView } from "@/components/miner/rig-ui";
+import { AddRigDialog, StatusPill, UpdateBadge, UpdateButton, rigView } from "@/components/miner/rig-ui";
 import { useBrowserRig } from "@/components/miner/browser-rig";
 import { controlRig, profilesQuery, rigsQuery, statsQuery, type Rig } from "@/lib/miner-data";
 
@@ -82,6 +82,7 @@ function Fleet() {
                       {rig.name}
                       {isThis && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] text-accent-foreground">this device</span>}
                       <StatusPill view={view} />
+                      <UpdateBadge rig={rig} />
                     </p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {rig.kind === "browser" ? "Browser" : "Rig program"} · {rig.platform || "not connected yet"}
@@ -102,6 +103,7 @@ function Fleet() {
                   <Button size="sm" onClick={() => act(rig, "start")} disabled={running}><Play /> Start</Button>
                   <Button size="sm" variant="secondary" onClick={() => act(rig, "restart")}><RotateCw /> Restart</Button>
                   <Button size="sm" variant="destructive" onClick={() => act(rig, "stop")} disabled={!running}><Square /> Stop</Button>
+                  <UpdateButton rig={rig} size="sm" onSent={() => qc.invalidateQueries({ queryKey: rigsQuery.queryKey })} />
                 </div>
               </li>
             );

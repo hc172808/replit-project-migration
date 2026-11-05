@@ -17,6 +17,7 @@
     "rolldown": "1.2.1"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.108",
     "@hookform/resolvers": "^5.2.2",
     "@lovable.dev/cloud-auth-js": "^1.2.0",
     "@noble/hashes": "^2.4.0",
@@ -54,6 +55,7 @@
     "@tanstack/router-plugin": "1.168.42",
     "@walletconnect/ethereum-provider": "^2.26.0",
     "@walletconnect/modal": "^2.7.0",
+    "ai": "^7.0.162",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
