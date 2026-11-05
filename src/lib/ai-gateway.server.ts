@@ -23,7 +23,7 @@ export class GatewayError extends Error {
 
 /** Streams a one-shot answer and returns the final text. */
 export async function generateTextStreamed(opts: { instructions: string; prompt: string; signal?: AbortSignal }) {
-  const apiKey = process.env.LOVABLE_API_KEY;
+  const apiKey = process.env["LOVABLE_API_KEY"];
   if (!apiKey) throw new GatewayError("AI is not configured for this app.", 401);
   const provider = createOpenAI({
     baseURL: GATEWAY_URL,
@@ -36,7 +36,7 @@ export async function generateTextStreamed(opts: { instructions: string; prompt:
     model: provider.responses(DEFAULT_TEXT_MODEL),
     instructions: opts.instructions,
     messages: [{ role: "user", content: opts.prompt }],
-    abortSignal: opts.signal,
+    ...(opts.signal ? { abortSignal: opts.signal } : {}),
     onError: ({ error }) => { failure = error; },
     providerOptions: {
       openai: {
