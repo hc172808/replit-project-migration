@@ -17,6 +17,13 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    server: {
+      host: "0.0.0.0",
+      port: 5000,
+      strictPort: true,
+      allowedHosts: true,
+      watch: { ignored: ["**/.local/**", "**/.agents/**"] },
+    },
     define: { __APP_BUILD_ID__: JSON.stringify(APP_BUILD_ID) },
   },
 });
