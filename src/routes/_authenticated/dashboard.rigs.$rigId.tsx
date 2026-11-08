@@ -16,6 +16,7 @@ import {
   commandsQuery, controlRig, deleteRig, profilesQuery, rigsQuery, sendRigCommand, updateRig, type Rig,
 } from "@/lib/miner-data";
 import { rotateRigToken } from "@/lib/rigs.functions";
+import { RigLogAnalysis } from "@/components/miner/rig-log-analysis";
 
 export const Route = createFileRoute("/_authenticated/dashboard/rigs/$rigId")({
   head: () => ({
@@ -223,6 +224,7 @@ function RigDetail() {
           {log.slice(-100).join("\n") || "No activity yet."}
         </pre>
       </Section>
+      <RigLogAnalysis key={rig.id} rigId={rig.id} reportedLog={log} />
 
       {!isThis && (
         <Section title="Recent commands">

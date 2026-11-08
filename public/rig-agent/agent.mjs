@@ -473,7 +473,9 @@ async function selfUpdate(latest) {
   const code = await res.text();
   const v = code.match(/const AGENT_VERSION = "([\d.]+)"/)?.[1];
   if (!v) throw new Error("Downloaded file is not the rig program.");
+  if (latest && v !== latest) throw new Error(`Dashboard offers v${latest}, but downloaded v${v}. Try again after publishing finishes.`);
   if (v === AGENT_VERSION) return `Already on v${v}`;
+  if (!newer(v, AGENT_VERSION)) throw new Error(`Refusing to downgrade v${AGENT_VERSION} to v${v}.`);
   fs.writeFileSync(`${SELF}.new`, code);
   fs.renameSync(`${SELF}.new`, SELF);
   log(`Updated rig program v${AGENT_VERSION} → v${v}${latest && latest !== v ? ` (dashboard says ${latest})` : ""}. Restarting…`);

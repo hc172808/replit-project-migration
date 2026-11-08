@@ -21,6 +21,10 @@ function randomPassword() {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
+function requestHost() {
+  return (getRequestHeader("x-forwarded-host") || getRequestHeader("host") || "gydsminer.app").split(",")[0]?.trim() || "gydsminer.app";
+}
+
 export function buildSignInMessage(host: string, address: string, nonce: string, issuedAt: string) {
   return [
     `${host} wants you to sign in with your Ethereum account:`,
@@ -69,13 +73,14 @@ export const registerUsername = createServerFn({ method: "POST" })
 export const getWalletChallenge = createServerFn({ method: "POST" })
   .inputValidator((input) => z.object({ address: z.string().regex(ADDRESS_RE) }).parse(input))
   .handler(async ({ data }) => {
-    const host = (getRequestHeader("x-forwarded-host") || getRequestHeader("host") || "gydsminer.app").split(",")[0]!.trim();
+    const host = requestHost();
     const nonce = crypto.randomUUID().replace(/-/g, "");
     const issuedAt = new Date().toISOString();
     const sb = await admin();
     const { error } = await sb.from("auth_nonces").insert({
       nonce,
       address: data.address.toLowerCase(),
+      created_at: issuedAt,
       expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
     });
     if (error) throw new Error("Could not start wallet sign-in.");
@@ -89,13 +94,19 @@ async function checkSignature(message: string, signature: string, address: strin
   const { data: row } = await sb.from("auth_nonces").select("*").eq("nonce", nonce).maybeSingle();
   if (!row || row.used || row.address !== address.toLowerCase() || new Date(row.expires_at).getTime() < Date.now())
     return "This sign-in request expired. Try again.";
-  await sb.from("auth_nonces").update({ used: true }).eq("nonce", nonce);
+  const issuedAt = /Issued At: (.+)$/.exec(message)?.[1];
+  if (!issuedAt || new Date(issuedAt).getTime() !== new Date(row.created_at).getTime() || message !== buildSignInMessage(requestHost(), address, nonce, issuedAt))
+    return "Invalid sign-in message.";
   const ok = await verifyMessage({
     address: address as `0x${string}`,
     message,
     signature: signature as `0x${string}`,
   }).catch(() => false);
-  return ok ? null : "Signature does not match this wallet.";
+  if (!ok) return "Signature does not match this wallet.";
+  // Only one concurrent request may consume a valid challenge.
+  const { data: consumed, error } = await sb.from("auth_nonces").update({ used: true })
+    .eq("nonce", nonce).eq("used", false).gt("expires_at", new Date().toISOString()).select("nonce").maybeSingle();
+  return !error && consumed ? null : "This sign-in request expired. Try again.";
 }
 
 const sigInput = z.object({

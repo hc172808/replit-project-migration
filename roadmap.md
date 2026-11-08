@@ -1,6 +1,9 @@
 # Roadmap
 
 ## Open
+- [ ] Add owner-only rig error-log submission with AI causes and troubleshooting steps
+- [ ] Finish username/wallet sign-in, automated tests, and signed-in dashboard verification
+- [ ] Validate per-rig/app updates, rig health, and phone installation
 - [ ] Multi-asset mining (not only GYDS): per-asset algorithm, pool/node, wallet — waiting on which coins
 - [ ] Rig fleet: control all rigs from one dashboard (start, stop, restart, speed/intensity, CPU/GPU overclock) — needs a rig agent on each server/PC/phone
 - [ ] Rig program auto-detects CPUs and GPUs (NVIDIA/AMD/Intel) on setup and reports them to the dashboard

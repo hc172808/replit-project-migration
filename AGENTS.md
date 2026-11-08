@@ -10,6 +10,10 @@
 <!-- LOVABLE:END -->
 
 ## Project rules
-- Mining runs only in the signed-in user's browser via Web Workers (`src/lib/mining/`), started explicitly by the user; never mine on the server or auto-start — server hosting can't run long CPU jobs and visitors must opt in.
+- Browser mining runs only in the signed-in user's tab via Web Workers, explicitly started by the user; never run mining on Lovable hosting because it cannot host long CPU jobs.
+- The separately installed rig agent runs on owner-controlled hardware and persists the desired mining state through dashboard outages and service restarts so it keeps mining until Stop.
+- The PWA service worker is online-only and never caches pages or API responses to avoid persisting private rig data or stale releases.
+- Wallet challenges are bound to the requesting host and issued message, and consumed atomically after signature verification to prevent replay and concurrent sign-ins.
+- Rig log diagnosis verifies rig ownership before calling AI, redacts common credentials, and treats submitted logs as untrusted evidence; analysis never applies rig commands.
 - All GYDS RPC calls go through the `minerRpc` server function so Cloudflare Access secrets stay server-side; the browser can write `rpc_endpoints.cf_client_secret` but column grants block reading it back.
 - The hash rule in `src/lib/mining/hash.ts` must stay byte-identical to the original miner (sha256 of prevHash+address+decimal nonce, share when hash < target); tests in `src/test/mining-rules.test.ts` lock it.

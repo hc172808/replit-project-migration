@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import "@lovable.dev/cloud-auth-js/styles.css";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+import { registerUsername, getWalletChallenge, signInWithWallet } from "@/lib/account.functions";
+import { normaliseUsername, USERNAME_RE, usernameEmail } from "@/lib/assets";
+import { connectWallet, type WalletKind } from "@/lib/wallet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,22 +25,25 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-type Mode = "signin" | "signup" | "forgot";
+type Mode = "signin" | "signup";
 
 function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("signin");
-  const [email, setEmail] = useState("");
+  const register = useServerFn(registerUsername);
+  const challenge = useServerFn(getWalletChallenge);
+  const walletSignIn = useServerFn(signInWithWallet);
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
-    });
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) navigate({ to: "/dashboard", replace: true });
+    });
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) navigate({ to: "/dashboard", replace: true });
     });
     return () => data.subscription.unsubscribe();
   }, [navigate]);
@@ -48,24 +53,14 @@ function AuthPage() {
     setBusy(true);
     setNotice(null);
     try {
-      if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      } else if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin + "/dashboard" },
-        });
-        if (error) throw error;
-        if (!data.session) setNotice("Check your email to confirm your account, then sign in.");
-      } else {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
-        if (error) throw error;
-        setNotice("If that email has an account, a reset link is on its way.");
+      const name = normaliseUsername(username);
+      if (!USERNAME_RE.test(name)) throw new Error("Use 3–24 letters, numbers or underscores for your username.");
+      if (mode === "signup") {
+        const result = await register({ data: { username: name, password } });
+        if (!result.ok) throw new Error(result.error);
       }
+      const { error } = await supabase.auth.signInWithPassword({ email: usernameEmail(name), password });
+      if (error) throw error;
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -73,9 +68,24 @@ function AuthPage() {
     }
   }
 
-  async function oauth(provider: "google" | "lovable") {
-    const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + "/auth" });
-    if (result.error) toast.error(result.error.message ?? "Sign-in failed");
+  async function wallet(kind: WalletKind) {
+    setBusy(true);
+    setNotice(null);
+    let connection: Awaited<ReturnType<typeof connectWallet>> | undefined;
+    try {
+      connection = await connectWallet(kind);
+      const { message } = await challenge({ data: { address: connection.address } });
+      const signature = await connection.sign(message);
+      const result = await walletSignIn({ data: { address: connection.address, message, signature } });
+      if (!result.ok) throw new Error(result.error);
+      const { error } = await supabase.auth.verifyOtp({ token_hash: result.tokenHash, type: "magiclink" });
+      if (error) throw error;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Wallet sign-in failed.");
+    } finally {
+      await connection?.disconnect().catch(() => {});
+      setBusy(false);
+    }
   }
 
   return (
@@ -86,16 +96,15 @@ function AuthPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === "signin" && "Sign in to your mining dashboard."}
           {mode === "signup" && "Create an account for your rig."}
-          {mode === "forgot" && "We'll email you a reset link."}
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="panel mt-8 space-y-4 p-5">
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+           <Label htmlFor="username">Username</Label>
+           <Input id="username" autoComplete="username" required minLength={3} maxLength={24} value={username} onChange={(e) => setUsername(e.target.value)} />
         </div>
-        {mode !== "forgot" && (
+        {(
           <div className="space-y-1.5">
             <Label htmlFor="password">Password</Label>
             <Input
@@ -111,20 +120,20 @@ function AuthPage() {
         )}
         {notice && <p className="text-sm text-success">{notice}</p>}
         <Button type="submit" variant="glow" className="w-full" disabled={busy}>
-          {mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
+          {busy ? "Connecting…" : mode === "signin" ? "Sign in" : "Create account"}
         </Button>
 
-        {mode !== "forgot" && (
+        {(
           <>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
             </div>
-            <Button type="button" variant="outline" className="w-full" onClick={() => oauth("google")}>
-              Continue with Google
+            <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => wallet("injected")}>
+              Browser wallet
             </Button>
-            <button type="button" className="lovable-auth-button w-full" onClick={() => oauth("lovable")}>
-              Continue with Lovable
-            </button>
+            <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => wallet("walletconnect")}>
+              WalletConnect
+            </Button>
           </>
         )}
       </form>
@@ -132,13 +141,13 @@ function AuthPage() {
       <div className="mt-5 flex flex-col items-center gap-2 text-sm text-muted-foreground">
         {mode === "signin" && (
           <>
-            <button className="hover:text-foreground" onClick={() => setMode("forgot")}>Forgot password?</button>
-            <button className="hover:text-foreground" onClick={() => setMode("signup")}>No account? Create one</button>
+            <Button variant="link" onClick={() => setMode("signup")}>No account? Create one</Button>
           </>
         )}
         {mode !== "signin" && (
-          <button className="hover:text-foreground" onClick={() => setMode("signin")}>Back to sign in</button>
+          <Button variant="link" onClick={() => setMode("signin")}>Back to sign in</Button>
         )}
+        {mode === "signup" && <p className="text-center text-xs">No recovery email. Keep your username and password safe.</p>}
         <Link to="/" className="hover:text-foreground">← Home</Link>
       </div>
     </main>

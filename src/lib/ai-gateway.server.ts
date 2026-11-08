@@ -1,21 +1,10 @@
 // Server-only Lovable AI Gateway helpers (OpenAI Responses via the AI SDK).
 import { createOpenAI } from "@ai-sdk/openai";
 import { streamText } from "ai";
+import { createLovableAiGatewayRunIdFetch } from "./ai-run-id.server.ts";
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1";
-const RUN_ID_HEADER = "X-Lovable-AIG-Run-ID";
 export const DEFAULT_TEXT_MODEL = "openai/gpt-6-astra";
-
-function runIdFetch(initialRunId?: string) {
-  let runId = initialRunId?.trim() || undefined;
-  return async (input: RequestInfo | URL, init?: RequestInit) => {
-    const headers = new Headers(init?.headers);
-    if (runId && !headers.has(RUN_ID_HEADER)) headers.set(RUN_ID_HEADER, runId);
-    const response = await fetch(input, { ...init, headers });
-    runId ??= response.headers.get(RUN_ID_HEADER)?.trim() || undefined;
-    return response;
-  };
-}
 
 export class GatewayError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -29,10 +18,11 @@ export async function generateTextStreamed(opts: { instructions: string; prompt:
     baseURL: GATEWAY_URL,
     apiKey,
     headers: { "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-    fetch: runIdFetch(),
+    fetch: createLovableAiGatewayRunIdFetch().fetch,
   });
   let failure: unknown = null;
   const result = streamText({
+    maxRetries: 0,
     model: provider.responses(DEFAULT_TEXT_MODEL),
     instructions: opts.instructions,
     messages: [{ role: "user", content: opts.prompt }],
@@ -60,6 +50,14 @@ export async function generateTextStreamed(opts: { instructions: string; prompt:
 
 function toGatewayError(e: unknown): GatewayError {
   const status = Number((e as { statusCode?: number } | null)?.statusCode ?? 0);
+  const responseBody = (e as { responseBody?: string } | null)?.responseBody;
+  if (responseBody) {
+    try {
+      const body = JSON.parse(responseBody) as { error?: { message?: string }; message?: string };
+      const message = body.error?.message ?? body.message;
+      if (message) return new GatewayError(message, status || 500);
+    } catch { /* Fall back to safe messages for malformed provider errors. */ }
+  }
   if (status === 402) return new GatewayError("The AI credits for this workspace have run out. Add credits to keep using the explainer.", 402);
   if (status === 429) return new GatewayError("The AI is busy right now. Please try again in a minute.", 429);
   if (status === 403) return new GatewayError("AI access is blocked for this workspace right now.", 403);
