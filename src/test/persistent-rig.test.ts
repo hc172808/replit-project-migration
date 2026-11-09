@@ -14,7 +14,7 @@ describe("persistent installed rig", () => {
       STATE_FILE: "state.json", log: vi.fn(), BuiltinMiner: Miner, ExternalMiner: Miner });
     vm.runInContext(controller, context);
     const running = { desiredState: "running", profile: { id: "p1", coin: "GYDS", miner: "builtin" }, tuning: {} };
-    context.state = running;
+    context['state'] = running;
     vm.runInContext("saveState(state); reconcile(loadState()); reconcile(loadState());", context);
     expect(JSON.parse(saved)).toEqual(running);
     expect(start).toHaveBeenCalledTimes(1);
