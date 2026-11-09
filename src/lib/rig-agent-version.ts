@@ -2,7 +2,7 @@
 // Bump this together with AGENT_VERSION inside public/rig-agent/agent.mjs whenever
 // the rig program changes; rigs running an older version show "Update available".
 // src/test/rig-updates.test.ts fails if the two drift apart.
-export const RIG_AGENT_VERSION = "1.1.0";
+export const RIG_AGENT_VERSION = "1.2.0";
 
 /** True when `latest` is a higher dotted version than `current` (e.g. 1.2.0 > 1.1.9). */
 export function isNewerVersion(latest: string, current: string): boolean {

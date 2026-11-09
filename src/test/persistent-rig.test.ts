@@ -2,9 +2,18 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { spawnSync } from "node:child_process";
 
 const source = readFileSync("public/rig-agent/agent.mjs", "utf8");
 describe("persistent installed rig", () => {
+  it("initializes settings before starting the installed program", () => {
+    const result = spawnSync(process.execPath, ["public/rig-agent/agent.mjs"], {
+      env: { ...process.env, DASHBOARD_URL: "", RIG_TOKEN: "" }, encoding: "utf8", timeout: 5000,
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("DASHBOARD_URL and RIG_TOKEN must be set");
+    expect(result.stderr).not.toContain("ReferenceError");
+  });
   it("saves and restores running state and stops only on an explicit stopped state", () => {
     let saved = "";
     const start = vi.fn().mockResolvedValue(undefined), stop = vi.fn();

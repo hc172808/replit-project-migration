@@ -226,6 +226,47 @@ export type Database = {
           },
         ]
       }
+      rig_update_history: {
+        Row: {
+          id: string
+          installed_version: string
+          message: string
+          occurred_at: string
+          received_at: string
+          result: string
+          rig_id: string
+          target_version: string
+        }
+        Insert: {
+          id: string
+          installed_version: string
+          message?: string
+          occurred_at: string
+          received_at?: string
+          result: string
+          rig_id: string
+          target_version?: string
+        }
+        Update: {
+          id?: string
+          installed_version?: string
+          message?: string
+          occurred_at?: string
+          received_at?: string
+          result?: string
+          rig_id?: string
+          target_version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rig_update_history_rig_id_fkey"
+            columns: ["rig_id"]
+            isOneToOne: false
+            referencedRelation: "rigs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rigs: {
         Row: {
           agent_version: string

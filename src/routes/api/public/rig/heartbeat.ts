@@ -19,6 +19,10 @@ const Body = z.object({
     .array(z.object({ id: z.string().uuid(), ok: z.boolean(), message: z.string().max(500).default("") }))
     .max(50)
     .default([]),
+  updateEvents: z.array(z.object({
+    id: z.string().uuid(), installedVersion: z.string().min(1).max(50), targetVersion: z.string().max(50).default(""),
+    result: z.enum(["installed", "success", "failed"]), message: z.string().max(500).default(""), occurredAt: z.string().datetime(),
+  })).max(50).default([]),
 });
 
 export const Route = createFileRoute("/api/public/rig/heartbeat")({
@@ -41,18 +45,48 @@ export const Route = createFileRoute("/api/public/rig/heartbeat")({
         const hash = await sha256Hex(token);
         const { data: rig } = await sb
           .from("rigs")
-          .select("id, user_id, name, desired_state, tuning, profile_id, log, kind")
+          .select("id, user_id, name, desired_state, tuning, profile_id, log, kind, agent_version")
           .eq("token_hash", hash)
           .maybeSingle();
         if (!rig || rig.kind !== "agent") return new Response("Unauthorized", { status: 401 });
 
+        const acknowledgedUpdateEvents: string[] = [];
+        for (const event of body.updateEvents) {
+          const { error } = await sb.from("rig_update_history").upsert({
+            id: event.id, rig_id: rig.id, installed_version: event.installedVersion, target_version: event.targetVersion,
+            result: event.result, message: event.message, occurred_at: event.occurredAt,
+          }, { onConflict: "id", ignoreDuplicates: true });
+          if (error) return Response.json({ error: "Could not save update history" }, { status: 503 });
+          acknowledgedUpdateEvents.push(event.id);
+        }
+        // Older agents cannot send durable events; retain their first/version-change check-in.
+        if (!body.updateEvents.length && body.agentVersion && body.agentVersion !== rig.agent_version) {
+          const { error } = await sb.from("rig_update_history").insert({
+            id: crypto.randomUUID(), rig_id: rig.id, installed_version: body.agentVersion,
+            result: "installed", message: "Version reported by rig", occurred_at: new Date().toISOString(),
+          });
+          if (error) return Response.json({ error: "Could not save update history" }, { status: 503 });
+        }
+
         // Record results for commands this rig was given.
         for (const r of body.commandResults) {
+          if (!r.ok) {
+            const { data: command } = await sb.from("rig_commands").select("command")
+              .eq("id", r.id).eq("rig_id", rig.id).maybeSingle();
+            if (command?.command === "update" && !body.updateEvents.some((event) => event.result === "failed")) {
+              const { error } = await sb.from("rig_update_history").upsert({
+                id: r.id, rig_id: rig.id, installed_version: body.agentVersion || "unknown", target_version: RIG_AGENT_VERSION,
+                result: "failed", message: r.message, occurred_at: new Date().toISOString(),
+              }, { onConflict: "id", ignoreDuplicates: true });
+              if (error) return Response.json({ error: "Could not save update result" }, { status: 503 });
+            }
+          }
           await sb
             .from("rig_commands")
             .update({ status: r.ok ? "done" : "failed", result: r.message, updated_at: new Date().toISOString() })
             .eq("id", r.id)
-            .eq("rig_id", rig.id);
+            .eq("rig_id", rig.id)
+            .in("status", ["pending", "acked"]);
         }
 
         const log = [...(rig.log ?? []), ...body.log].slice(-200);
@@ -109,6 +143,7 @@ export const Route = createFileRoute("/api/public/rig/heartbeat")({
             profile,
             commands: commands ?? [],
             latestAgentVersion: RIG_AGENT_VERSION,
+            acknowledgedUpdateEvents,
             pollSeconds: 10,
           },
           { headers: { "Cache-Control": "no-store" } },

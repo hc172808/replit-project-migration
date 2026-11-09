@@ -20,15 +20,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFile, spawn } from "node:child_process";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const AGENT_VERSION = "1.1.0";
+const AGENT_VERSION = "1.2.0";
 const SELF = fileURLToPath(import.meta.url);
 const DIR = path.dirname(SELF);
-
-if (!isMainThread) runHashThread();
-else main().catch((e) => { console.error("Fatal:", e); process.exit(1); });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Built-in GYDS hashing thread. Same rule as the browser miner and the original
@@ -477,9 +474,41 @@ async function selfUpdate(latest) {
   if (v === AGENT_VERSION) return `Already on v${v}`;
   if (!newer(v, AGENT_VERSION)) throw new Error(`Refusing to downgrade v${AGENT_VERSION} to v${v}.`);
   fs.writeFileSync(`${SELF}.new`, code);
+  const journal = loadUpdates();
+  journal.pending = { targetVersion: v, occurredAt: new Date().toISOString() };
+  saveUpdates(journal);
   fs.renameSync(`${SELF}.new`, SELF);
   log(`Updated rig program v${AGENT_VERSION} → v${v}${latest && latest !== v ? ` (dashboard says ${latest})` : ""}. Restarting…`);
   return `Updated to v${v}`;
+}
+
+// Durable journal: success means the replacement actually started, not just downloaded.
+function loadUpdates() {
+  try { return JSON.parse(fs.readFileSync(path.join(DIR, "updates.json"), "utf8")); }
+  catch { return { events: [], pending: null, reportedVersion: "" }; }
+}
+function saveUpdates(journal) {
+  const file = path.join(DIR, "updates.json");
+  fs.writeFileSync(`${file}.tmp`, JSON.stringify(journal), { mode: 0o600 });
+  fs.renameSync(`${file}.tmp`, file);
+}
+function updateEvent(journal, result, targetVersion, message) {
+  journal.events.push({ id: randomUUID(), installedVersion: AGENT_VERSION, targetVersion: targetVersion || "",
+    result, message: message.slice(0, 500), occurredAt: new Date().toISOString() });
+  saveUpdates(journal);
+}
+function finishUpdateOnStartup() {
+  const journal = loadUpdates();
+  if (journal.pending) {
+    const target = journal.pending.targetVersion;
+    journal.pending = null;
+    updateEvent(journal, AGENT_VERSION === target ? "success" : "failed", target,
+      AGENT_VERSION === target ? "Updated agent started successfully" : "Replacement did not start on the expected version");
+  } else if (journal.reportedVersion !== AGENT_VERSION) {
+    updateEvent(journal, "installed", AGENT_VERSION, "Installed agent started");
+  }
+  journal.reportedVersion = AGENT_VERSION;
+  saveUpdates(journal);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -492,6 +521,7 @@ async function main() {
   }
   log(`GYDS rig program v${AGENT_VERSION} on ${os.hostname()} (${process.platform}/${os.arch()}, Node ${process.version})`);
   hardware = await detectHardware();
+  finishUpdateOnStartup();
   log(`Found ${hardware.cpus} CPU thread(s): ${hardware.cpuModel}; ${hardware.gpus.length} GPU(s)${hardware.gpus.length ? ": " + hardware.gpus.map((g) => g.name).join(", ") : ""}`);
   setInterval(async () => { hardware = await detectHardware(); }, 10 * 60 * 1000);
 
@@ -517,7 +547,8 @@ async function main() {
         hardware,
         stats: s ? { hashRate: s.hashRate, accepted: s.accepted, rejected: s.rejected, reward: s.reward, threads: s.threads, pool: s.pool, error: s.error, blockHeight: s.blockHeight, uptime: Math.round((Date.now() - s.startedAt) / 1000), history: s.history.slice(-60), devices: await deviceStats(hardware) } : { devices: await deviceStats(hardware) },
         log: pendingLog.splice(0, 100),
-        commandResults: results.splice(0, 50),
+        commandResults: results.slice(0, 50),
+        updateEvents: loadUpdates().events.slice(0, 50),
       };
       const res = await fetch(`${CFG.dashboard}/api/public/rig/heartbeat`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${CFG.token}` },
@@ -528,8 +559,12 @@ async function main() {
       else {
         if (failures) log("Reconnected to the dashboard.");
         failures = 0;
-        if (restartAfterBeat) { stopMiner("updating"); process.exit(0); }
+        results.splice(0, body.commandResults.length);
         const data = await res.json();
+        const journal = loadUpdates();
+        journal.events = journal.events.filter((event) => !(data.acknowledgedUpdateEvents || []).includes(event.id));
+        saveUpdates(journal);
+        if (restartAfterBeat) { stopMiner("updating"); process.exit(0); }
         poll = data.pollSeconds || 10;
         state = { desiredState: data.rig.desiredState, profile: data.profile, tuning: data.rig.tuning || {} };
         saveState(state);
@@ -542,11 +577,21 @@ async function main() {
               results.push({ id: c.id, ok: true, message: msg });
               if (msg.startsWith("Updated")) restartAfterBeat = true;
             } else results.push({ id: c.id, ok: true, message: c.command === "stop" ? "Stopping" : "Applied" });
-          } catch (e) { results.push({ id: c.id, ok: false, message: e.message }); log(`Command ${c.command} failed: ${e.message}`); }
+          } catch (e) {
+            if (c.command === "update") {
+              const journal = loadUpdates(); journal.pending = null;
+              updateEvent(journal, "failed", data.latestAgentVersion, e.message);
+            }
+            results.push({ id: c.id, ok: false, message: e.message }); log(`Command ${c.command} failed: ${e.message}`);
+          }
         }
         if (CFG.autoUpdate && data.latestAgentVersion && newer(data.latestAgentVersion, AGENT_VERSION) && !restartAfterBeat) {
           try { const msg = await selfUpdate(data.latestAgentVersion); if (msg.startsWith("Updated")) restartAfterBeat = true; }
-          catch (e) { log(`Auto-update failed: ${e.message}`); }
+          catch (e) {
+            const journal = loadUpdates(); journal.pending = null;
+            updateEvent(journal, "failed", data.latestAgentVersion, e.message);
+            log(`Auto-update failed: ${e.message}`);
+          }
         } else if (data.latestAgentVersion && newer(data.latestAgentVersion, AGENT_VERSION) && !restartAfterBeat && Math.random() < 0.02) {
           log(`Update available: v${data.latestAgentVersion} (you have v${AGENT_VERSION}). Press Update on the dashboard.`);
         }
@@ -567,3 +612,7 @@ function newer(a, b) {
   for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
   return false;
 }
+
+// Start only after configuration and controller state have been initialized.
+if (!isMainThread) runHashThread();
+else main().catch((e) => { console.error("Fatal:", e); process.exit(1); });

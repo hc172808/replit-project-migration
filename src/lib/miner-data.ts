@@ -70,6 +70,17 @@ export type RigCommand = {
   created_at: string;
 };
 
+export const updateHistoryQuery = (rigId: string) => queryOptions({
+  queryKey: ["miner", "update-history", rigId],
+  queryFn: async () => {
+    const { data, error } = await supabase.from("rig_update_history")
+      .select("id, installed_version, target_version, result, message, occurred_at, received_at")
+      .eq("rig_id", rigId).order("occurred_at", { ascending: false }).limit(100);
+    if (error) throw error;
+    return data ?? [];
+  },
+});
+
 export type StatsRow = {
   lifetime_shares: number;
   lifetime_rejected: number;

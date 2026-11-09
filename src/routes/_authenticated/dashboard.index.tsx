@@ -4,7 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Play, Plus, RotateCw, Square, ChevronRight, Thermometer } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Section, Stat, fmtHash } from "@/components/miner/parts";
+import { Section, Stat, fmtHash, fmtDuration } from "@/components/miner/parts";
+import { rigMonitoring } from "@/lib/rig-monitoring";
 import { AddRigDialog, StatusPill, UpdateBadge, UpdateButton, rigView } from "@/components/miner/rig-ui";
 import { useBrowserRig } from "@/components/miner/browser-rig";
 import { controlRig, profilesQuery, rigsQuery, statsQuery, type Rig } from "@/lib/miner-data";
@@ -33,7 +34,8 @@ function Fleet() {
   const [adding, setAdding] = useState(false);
 
   const live = (r: Rig) => (r.id === browser.rigId
-    ? { hashRate: browser.state.hashRate, accepted: browser.state.validShares, rejected: browser.state.rejectedShares }
+    ? { hashRate: browser.state.hashRate, accepted: browser.state.validShares, rejected: browser.state.rejectedShares,
+        uptime: browser.state.running && browser.state.startTime ? (Date.now() - browser.state.startTime) / 1000 : 0 }
     : r.stats);
   const views = rigs.map((r) => ({ rig: r, view: rigView(r, r.id === browser.rigId, browser.state.running), s: live(r) }));
   const online = views.filter((v) => v.view.online).length;
@@ -47,7 +49,7 @@ function Fleet() {
         if (res.ok) toast.success(res.message); else toast.error(res.message);
       } else {
         await controlRig(r, action);
-        toast.success(`${action[0]!.toUpperCase()}${action.slice(1)} sent to ${r.name}`);
+        toast.success(`${action.charAt(0).toUpperCase()}${action.slice(1)} sent to ${r.name}`);
       }
       qc.invalidateQueries({ queryKey: rigsQuery.queryKey });
     } catch (e) {
@@ -73,6 +75,7 @@ function Fleet() {
             const profile = profiles.find((p) => p.id === rig.profile_id);
             const hot = (rig.stats.devices ?? []).reduce((m, d) => Math.max(m, d.temp ?? 0), 0);
             const isThis = rig.id === browser.rigId;
+            const monitoring = rigMonitoring(rig.last_seen_at, s.uptime);
             const running = isThis ? browser.state.running : rig.desired_state === "running";
             return (
               <li key={rig.id} className="rounded-lg border border-border p-3">
@@ -99,6 +102,11 @@ function Fleet() {
                   <span className="text-muted-foreground">✗ {s.rejected ?? 0}</span>
                   {hot > 0 && <span className="flex items-center gap-1 text-muted-foreground"><Thermometer className="h-3 w-3" />{hot}°C</span>}
                 </div>
+                <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                  <div><dt className="text-muted-foreground">Connection</dt><dd className={view.online ? "text-signal" : "text-muted-foreground"}>{view.online ? "Online" : "Offline"}</dd></div>
+                  <div><dt className="text-muted-foreground">Mining uptime{!view.online ? " (last reported)" : ""}</dt><dd className="font-mono">{fmtDuration(monitoring.miningSeconds)}</dd></div>
+                  <div><dt className="text-muted-foreground">Last check-in</dt><dd>{isThis ? "This tab is connected" : monitoring.lastCheckIn}</dd></div>
+                </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => act(rig, "start")} disabled={running}><Play /> Start</Button>
                   <Button size="sm" variant="secondary" onClick={() => act(rig, "restart")}><RotateCw /> Restart</Button>

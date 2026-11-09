@@ -13,4 +13,5 @@
 - [ ] Verify signed-in dashboard end-to-end (blocked: needs a first account)
 
 ## Done
+- [x] Per-rig update history, online/mining uptime/last check-in, and cross-device setup scripts (hardware installation remains unverified)
 - [x] Replit GYDS miner migrated to in-browser mining with Lovable Cloud

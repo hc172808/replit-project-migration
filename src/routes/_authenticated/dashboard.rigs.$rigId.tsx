@@ -13,7 +13,7 @@ import { StatusPill, TuningForm, SetupInstructions, UpdateBadge, UpdateButton, r
 import { useBrowserRig } from "@/components/miner/browser-rig";
 import { assetFor, type Tuning } from "@/lib/assets";
 import {
-  commandsQuery, controlRig, deleteRig, profilesQuery, rigsQuery, sendRigCommand, updateRig, type Rig,
+  commandsQuery, controlRig, deleteRig, profilesQuery, rigsQuery, sendRigCommand, updateRig, updateHistoryQuery, type Rig,
 } from "@/lib/miner-data";
 import { rotateRigToken } from "@/lib/rigs.functions";
 import { RigLogAnalysis } from "@/components/miner/rig-log-analysis";
@@ -41,6 +41,7 @@ function RigDetail() {
   const { data: rigs } = useSuspenseQuery({ ...rigsQuery, refetchInterval: 5000 });
   const { data: profiles } = useSuspenseQuery(profilesQuery);
   const { data: commands } = useQuery({ ...commandsQuery(rigId), refetchInterval: 5000 });
+  const history = useQuery({ ...updateHistoryQuery(rigId), refetchInterval: 5000 });
   const browser = useBrowserRig();
   const [newToken, setNewToken] = useState<string | null>(null);
   const rig = rigs.find((r) => r.id === rigId);
@@ -60,7 +61,7 @@ function RigDetail() {
     ? {
         hashRate: browser.state.hashRate, accepted: browser.state.validShares, rejected: browser.state.rejectedShares,
         reward: browser.state.totalReward, threads: browser.state.effectiveThreads,
-        uptime: browser.state.startTime ? (Date.now() - browser.state.startTime) / 1000 : 0,
+        uptime: browser.state.running && browser.state.startTime ? (Date.now() - browser.state.startTime) / 1000 : 0,
         history: browser.state.hashHistory.map((h) => h.hr), error: browser.state.lastError, devices: [],
       }
     : rig.stats;
@@ -77,12 +78,13 @@ function RigDetail() {
   };
 
   async function act(action: "start" | "stop" | "restart") {
+    if (!rig) return;
     try {
       if (isThis) {
         const r = await browser.run(action);
         if (r.ok) toast.success(r.message); else toast.error(r.message);
       } else {
-        await controlRig(rig!, action);
+        await controlRig(rig, action);
         toast.success(`${action} sent — the rig picks it up within ~10 seconds`);
       }
       refresh();
@@ -90,13 +92,14 @@ function RigDetail() {
   }
 
   async function applyChange(patch: Partial<Rig>, command: "apply_tuning" | "set_profile") {
+    if (!rig) return;
     try {
-      await updateRig(rig!.id, patch);
+      await updateRig(rig.id, patch);
       if (isThis) {
         const r = await browser.run(command);
         if (!r.ok) toast.error(r.message); else toast.success(r.message === "Saved — applies on next start." ? r.message : "Applied");
       } else {
-        await sendRigCommand(rig!.id, command);
+        await sendRigCommand(rig.id, command);
         toast.success("Saved — the rig applies it within ~10 seconds");
       }
       refresh();
@@ -148,7 +151,7 @@ function RigDetail() {
         <Stat label="Hash rate" value={fmtHash(view.online ? Number(s.hashRate ?? 0) : 0)} />
         <Stat label="Accepted" value={s.accepted ?? 0} tone="plain" />
         <Stat label="Rejected" value={s.rejected ?? 0} tone={s.rejected ? "danger" : "plain"} />
-        <Stat label="Uptime" value={fmtDuration(Number(s.uptime ?? 0))} tone="plain" />
+        <Stat label={view.online ? "Mining uptime" : "Uptime (last reported)"} value={fmtDuration(Number(s.uptime ?? 0))} tone="plain" />
       </div>
 
       <Section title="Hash rate" right={<span className="font-mono text-xs text-muted-foreground">{s.threads ?? 0} thread(s)</span>}>
@@ -167,7 +170,7 @@ function RigDetail() {
             <table className="w-full text-left font-mono text-xs">
               <thead className="text-muted-foreground"><tr><th className="py-1">Device</th><th>Hash</th><th>Temp</th><th>Power</th><th>Fan</th></tr></thead>
               <tbody>
-                {rig.stats.devices!.map((d, i) => (
+                  {rig.stats.devices?.map((d, i) => (
                   <tr key={i} className="border-t border-border">
                     <td className="py-1.5">{d.name}</td>
                     <td className="text-signal">{d.hashRate != null ? fmtHash(d.hashRate) : "—"}</td>
@@ -182,7 +185,7 @@ function RigDetail() {
         )}
         {(rig.hardware.gpus?.length ?? 0) > 0 && !(rig.stats.devices?.length) && (
           <ul className="mt-3 space-y-1 font-mono text-xs text-muted-foreground">
-            {rig.hardware.gpus!.map((g, i) => <li key={i}>GPU {i}: {g.name}{g.memMb ? ` · ${Math.round(g.memMb / 1024)} GB` : ""}</li>)}
+            {rig.hardware.gpus?.map((g, i) => <li key={i}>GPU {i}: {g.name}{g.memMb ? ` · ${Math.round(g.memMb / 1024)} GB` : ""}</li>)}
           </ul>
         )}
       </Section>
@@ -225,6 +228,23 @@ function RigDetail() {
         </pre>
       </Section>
       <RigLogAnalysis key={rig.id} rigId={rig.id} reportedLog={log} />
+
+      {rig.kind === "agent" && <Section title="Update history">
+        <p className="mb-3 text-sm">Installed version: <span className="font-mono">{rig.agent_version || "Not reported"}</span></p>
+        {history.isPending ? <p className="text-sm text-muted-foreground">Loading history…</p>
+          : history.isError ? <p className="text-sm text-destructive">Could not load update history.</p>
+          : <ul className="divide-y divide-border">
+            {(history.data ?? []).map((entry) => <li key={entry.id} className="py-3 text-sm">
+              <div className="flex flex-wrap justify-between gap-2">
+                <span className="font-mono">v{entry.installed_version}{entry.result === "failed" && entry.target_version ? ` → v${entry.target_version}` : ""}</span>
+                <span className={entry.result === "failed" ? "text-destructive" : "text-signal"}>{entry.result === "success" ? "Update successful" : entry.result === "failed" ? "Update failed" : "Installed"}</span>
+              </div>
+              <time className="text-xs text-muted-foreground" dateTime={entry.occurred_at}>{new Date(entry.occurred_at).toLocaleString()}</time>
+              <p className="mt-1 break-words text-xs text-muted-foreground">{entry.message}</p>
+            </li>)}
+            {!history.data?.length && <li className="text-sm text-muted-foreground">No updates reported yet.</li>}
+          </ul>}
+      </Section>}
 
       {!isThis && (
         <Section title="Recent commands">

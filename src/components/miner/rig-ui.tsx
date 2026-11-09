@@ -183,9 +183,15 @@ export function SetupInstructions({ token, name }: { token: string; name: string
         </p>
       )}
       <div className="space-y-2">
-        <p className="font-semibold">Linux, macOS or Android (Termux)</p>
+        <p className="font-semibold">Ubuntu, Debian, other Linux or macOS</p>
         <CopyBlock text={`curl -fsSL ${origin}/rig-agent/install.sh | DASHBOARD_URL=${origin} RIG_TOKEN=${token} RIG_NAME="${name}" bash`} />
       </div>
+      <div className="space-y-2">
+        <p className="font-semibold">Android phone (Termux)</p>
+        <p className="text-xs text-muted-foreground">Install Termux and Termux:Boot from F-Droid, open both once, then run this in Termux. Disable battery optimization for Termux; Android may still stop background work.</p>
+        <CopyBlock text={`pkg update && pkg install -y curl bash\ncurl -fsSL ${origin}/rig-agent/install-android.sh | DASHBOARD_URL=${origin} RIG_TOKEN=${token} bash`} />
+      </div>
+      <p className="text-xs text-muted-foreground">iPhone and iPad can install the dashboard on their home screen and control rigs, but cannot run the background rig program.</p>
       <div className="space-y-2">
         <p className="font-semibold">Windows (PowerShell)</p>
         <CopyBlock text={`$env:DASHBOARD_URL="${origin}"; $env:RIG_TOKEN="${token}"; $env:RIG_NAME="${name}"; iwr -useb ${origin}/rig-agent/install.ps1 | iex`} />
