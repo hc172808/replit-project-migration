@@ -6,12 +6,17 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "start": "bash scripts/replit-start.sh",
+    "deploy:check": "bash scripts/deploy-check.sh",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "overrides": {
     "rolldown": "1.2.1"

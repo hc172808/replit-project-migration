@@ -1,5 +1,6 @@
 // Catalogue of supported coins and mining programs, shared by the dashboard
 // and documented for the rig program (rig-agent/README.md).
+import { DEFAULT_GYDS_RPC_URL } from "@/lib/mining/rpc-endpoints";
 
 export type Device = "cpu" | "gpu" | "asic" | "browser";
 
@@ -30,7 +31,7 @@ export const ASSETS: AssetPreset[] = [
   {
     coin: "GYDS", name: "GYDS Network", algorithm: "sha256-gyds", protocol: "gyds-rpc",
     devices: ["browser", "cpu"], miners: ["builtin"],
-    poolExample: "https://rpc.nelifegy.com",
+    poolExample: DEFAULT_GYDS_RPC_URL,
     walletHint: "0x… GYDS wallet address",
     requirements: [
       "Any CPU — works in a browser tab or the rig program.",

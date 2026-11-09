@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DEFAULT_GYDS_RPC_ENDPOINTS, normalizeRpcEndpointUrl } from "@/lib/mining/rpc-endpoints";
 import { cn } from "@/lib/utils";
 import type { EndpointRow } from "@/lib/miner-data";
 
@@ -126,6 +127,24 @@ export function EndpointList({
     setDraft(emptyDraft);
   }
 
+  function choosePreset(preset: (typeof DEFAULT_GYDS_RPC_ENDPOINTS)[number]) {
+    const existing = endpoints.find(
+      (endpoint) => normalizeRpcEndpointUrl(endpoint.url) === normalizeRpcEndpointUrl(preset.url),
+    );
+    if (existing) {
+      startEdit(existing);
+      return;
+    }
+    setEditing(null);
+    setAdding(true);
+    setDraft({
+      label: preset.label,
+      url: preset.url,
+      cf_client_id: "",
+      cf_client_secret: "",
+    });
+  }
+
   const form = (
     <div className="space-y-3 rounded-lg bg-inset p-4">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -146,7 +165,27 @@ export function EndpointList({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">Tried in order. If one fails, the next one is used automatically.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">Tried in order. If one fails, the next one is used automatically.</p>
+        <div className="flex flex-wrap gap-2">
+          {DEFAULT_GYDS_RPC_ENDPOINTS.map((preset) => {
+            const exists = endpoints.some(
+              (endpoint) => normalizeRpcEndpointUrl(endpoint.url) === normalizeRpcEndpointUrl(preset.url),
+            );
+            return (
+              <Button key={preset.url} size="sm" variant="outline" onClick={() => choosePreset(preset)}>
+                {exists ? "Configure official GYDS RPC" : "Add official GYDS RPC"}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
+      {DEFAULT_GYDS_RPC_ENDPOINTS.map((preset) => (
+        <p key={preset.url} className="text-xs text-muted-foreground">
+          Official GYDS endpoint: <code className="break-all">{preset.url}</code>
+          {preset.requiresCloudflareAccess && " — Cloudflare Access service-token credentials are required."}
+        </p>
+      ))}
       <ul className="space-y-2">
         {endpoints.map((e, i) => (
           <li key={e.id} className="space-y-2">
@@ -154,7 +193,9 @@ export function EndpointList({
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-sm font-semibold">
                   <span className="font-mono text-xs text-muted-foreground">#{i + 1}</span>
-                  {e.label}
+                  {DEFAULT_GYDS_RPC_ENDPOINTS.find(
+                    (preset) => normalizeRpcEndpointUrl(preset.url) === normalizeRpcEndpointUrl(e.url),
+                  )?.label ?? e.label}
                   {activeId === e.id && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] text-accent-foreground">active</span>}
                   {e.has_cf_secret && <KeyRound className="h-3.5 w-3.5 text-muted-foreground" aria-label="Has Cloudflare token" />}
                 </p>

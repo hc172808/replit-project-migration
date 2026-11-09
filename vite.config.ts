@@ -11,6 +11,7 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 const APP_BUILD_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 export default defineConfig({
+  nitro: { preset: "node-server" },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
@@ -22,7 +23,11 @@ export default defineConfig({
       port: 5000,
       strictPort: true,
       allowedHosts: true,
-      watch: { ignored: ["**/.local/**", "**/.agents/**"] },
+      watch: { ignored: ["**/.local/**", "**/.agents/**", "**/.cache/**"] },
+    },
+    optimizeDeps: {
+      noDiscovery: true,
+      include: [],
     },
     define: { __APP_BUILD_ID__: JSON.stringify(APP_BUILD_ID) },
   },

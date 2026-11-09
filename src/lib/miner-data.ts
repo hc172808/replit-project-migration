@@ -3,11 +3,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tuning } from "@/lib/assets";
-
-export const DEFAULT_ENDPOINTS = [
-  { label: "Primary", url: "https://rpc.nelifegy.com" },
-  { label: "Fallback", url: "https://netlifegy.com/api/mining/rpc" },
-];
+import { DEFAULT_ENDPOINTS } from "@/lib/mining/rpc-endpoints";
 
 export type MiningProfile = {
   id: string;

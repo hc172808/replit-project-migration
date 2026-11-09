@@ -1,0 +1,1 @@
+- [Vite on Replit](vite-replit.md) — avoid broad dependency discovery and ignore Replit support directories to prevent file-limit failures.

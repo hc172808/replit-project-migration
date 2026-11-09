@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "bash", "web", "bun-1.3"]
+modules = ["bash", "web", "bun-1.3", "nodejs-22"]
 
 [nix]
 channel = "stable-25_05"
@@ -24,9 +24,26 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "PATH=/nix/store/y3qbzvdfdp9jklxqks0lcr862xpgj4qi-nodejs-22.23.4-wrapped/bin:$PATH npm run dev"
 waitForPort = 5000
 
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 5001
+externalPort = 3000
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["bash", "-lc", "PATH=/nix/store/y3qbzvdfdp9jklxqks0lcr862xpgj4qi-nodejs-22.23.4-wrapped/bin:$PATH npm run start"]
+build = ["bash", "-lc", "PATH=/nix/store/y3qbzvdfdp9jklxqks0lcr862xpgj4qi-nodejs-22.23.4-wrapped/bin:$PATH npm run deploy:check"]
+
+[userenv]
+
+[userenv.shared]
+SUPABASE_URL = "https://c--f5e522de-d8b0-4696-9645-4b4b4dd241c8-prod.lovable.cloud"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_TsWKtauAHJD5oN9VejEpKw_CaV2F-Q4"
+VITE_SUPABASE_URL = "https://c--f5e522de-d8b0-4696-9645-4b4b4dd241c8-prod.lovable.cloud"
+VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_TsWKtauAHJD5oN9VejEpKw_CaV2F-Q4"

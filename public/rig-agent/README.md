@@ -6,6 +6,7 @@ Runs on a server, PC or Android phone (Termux) and is controlled from the GYDS M
 
 - Node.js 18 or newer (the installer adds it if missing)
 - The dashboard must be **published** — rigs can't reach the private preview address
+- The default GYDS mining RPC is `https://netlifegy.com/api/mining/rpc`. It is protected by Cloudflare Access; add its service-token credentials under the profile's **Node endpoints** in the dashboard.
 - For coins other than GYDS, install the mining program the profile uses and set its path in `.env`:
 
 | Coin | Device | Mining program |
