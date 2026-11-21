@@ -17,33 +17,84 @@ IS_TERMUX=0; [ -n "${PREFIX:-}" ] && [[ "$PREFIX" == *com.termux* ]] && IS_TERMU
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 
-# ── Node.js 18+ ──────────────────────────────────────────────────────────────
+# ── Validate settings and install runtime prerequisites ────────────────────────
+case "$DASHBOARD_URL" in https://*) ;; *) die "Use an https:// published dashboard URL.";; esac
+[[ "$RIG_TOKEN" =~ ^rig_[a-fA-F0-9]{64}$ ]] || die "Use the token from Add rig."
+[[ "$RIG_NAME" != *$'\n'* && "$RIG_NAME" != *$'\r'* ]] || die "Rig name must be a single line."
+[[ "$INSTALL_DIR" =~ ^/[a-zA-Z0-9_./-]+$ ]] || die "INSTALL_DIR must be an absolute path without spaces or shell characters."
+SETUP_MODE="${SETUP_MODE:-miner-only}"
+MINING_SOFTWARE="${MINING_SOFTWARE:-builtin}"
+case "$SETUP_MODE" in miner-only) ;; *) die "For separate hosting use setup.sh or setup-dashboard-server.sh first, then Add rig on that dashboard.";; esac
+case "$MINING_SOFTWARE" in builtin|xmrig) ;; *) die "Invalid MINING_SOFTWARE";; esac
+SUDO=()
+if [ "$IS_TERMUX" = 0 ] && [ "$(uname)" != Darwin ] && [ "$(id -u)" -ne 0 ]; then
+  command -v sudo >/dev/null || die "Install sudo or run as administrator."
+  SUDO=(sudo)
+fi
+# No mining or overclock changes run during setup.
+if [ "$IS_TERMUX" = 1 ]; then
+  pkg update -y
+  pkg install -y nodejs-lts curl bash ca-certificates
+elif command -v apt-get >/dev/null; then
+  "${SUDO[@]}" apt-get update
+  "${SUDO[@]}" apt-get install -y curl ca-certificates pciutils cron
+elif command -v dnf >/dev/null; then
+  "${SUDO[@]}" dnf install -y curl ca-certificates pciutils cronie
+elif command -v pacman >/dev/null; then
+  "${SUDO[@]}" pacman -Syu --needed --noconfirm curl ca-certificates pciutils cronie
+elif command -v apk >/dev/null; then
+  "${SUDO[@]}" apk add curl ca-certificates pciutils dcron bash
+elif command -v brew >/dev/null; then
+  command -v curl >/dev/null || brew install curl
+else die "Supported: Ubuntu/Debian, Fedora/RHEL, Arch, Alpine, macOS with Homebrew, Android with Termux."; fi
 need_node() {
   command -v node >/dev/null 2>&1 || return 0
   local major; major="$(node -p 'process.versions.node.split(".")[0]')"
-  [ "$major" -lt 18 ]
+  [ "$major" -lt 22 ]
 }
 if need_node; then
-  say "Installing Node.js…"
-  if [ "$IS_TERMUX" = 1 ]; then pkg install -y nodejs
+  say "Installing Node.js 22+…"
+  if [ "$IS_TERMUX" = 1 ]; then pkg install -y nodejs-lts
   elif command -v apt-get >/dev/null; then
-    SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"
-    curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO -E bash - && $SUDO apt-get install -y nodejs
-  elif command -v dnf >/dev/null; then sudo dnf install -y nodejs
-  elif command -v brew >/dev/null; then brew install node
-  else die "Please install Node.js 18 or newer, then run this again."; fi
+    NODE_SETUP="$(mktemp)"
+    curl -fsSL https://deb.nodesource.com/setup_22.x -o "$NODE_SETUP"
+    "${SUDO[@]}" -E bash "$NODE_SETUP"
+    rm -f "$NODE_SETUP"
+    "${SUDO[@]}" apt-get install -y nodejs
+  elif command -v dnf >/dev/null; then "${SUDO[@]}" dnf install -y nodejs
+  elif command -v pacman >/dev/null; then "${SUDO[@]}" pacman -S --needed --noconfirm nodejs
+  elif command -v apk >/dev/null; then "${SUDO[@]}" apk add nodejs
+  elif command -v brew >/dev/null; then brew install node@22; export PATH="$(brew --prefix node@22)/bin:$PATH"
+  fi
 fi
+need_node && die "Your package repository provides an old Node version. Install Node.js 22+ and rerun."
 NODE_BIN="$(command -v node)"
 
 # ── Files ────────────────────────────────────────────────────────────────────
 say "Installing into $INSTALL_DIR"
+umask 077
 mkdir -p "$INSTALL_DIR"
-curl -fsSL "$DASHBOARD_URL/rig-agent/agent.mjs" -o "$INSTALL_DIR/agent.mjs"
+TEMP_AGENT="$(mktemp "$INSTALL_DIR/agent.XXXXXX")"
+trap 'rm -f "$TEMP_AGENT"' EXIT
+curl -fsSL "$DASHBOARD_URL/rig-agent/agent.mjs" -o "$TEMP_AGENT"
+"$NODE_BIN" --input-type=module --check < "$TEMP_AGENT"
+mv "$TEMP_AGENT" "$INSTALL_DIR/agent.mjs"
 curl -fsSL "$DASHBOARD_URL/rig-agent/env.example" -o "$INSTALL_DIR/.env.example" || true
 
 if [ -f "$INSTALL_DIR/.env" ]; then
   # Keep the user's miner paths / options, refresh the connection details.
-  sed -i.bak -e "s|^DASHBOARD_URL=.*|DASHBOARD_URL=$DASHBOARD_URL|" -e "s|^RIG_TOKEN=.*|RIG_TOKEN=$RIG_TOKEN|" -e "s|^RIG_NAME=.*|RIG_NAME=$RIG_NAME|" "$INSTALL_DIR/.env"
+  export DASHBOARD_URL RIG_TOKEN RIG_NAME INSTALL_DIR
+  "$NODE_BIN" --input-type=module - <<'JS'
+import fs from 'node:fs';
+const file = `${process.env.INSTALL_DIR}/.env`;
+let text = fs.readFileSync(file, 'utf8');
+for (const key of ['DASHBOARD_URL', 'RIG_TOKEN', 'RIG_NAME']) {
+  const line = `${key}=${process.env[key]}`;
+  const re = new RegExp(`^${key}=.*$`, 'm');
+  text = re.test(text) ? text.replace(re, () => line) : `${text}\n${line}\n`;
+}
+fs.writeFileSync(file, text, { mode: 0o600 });
+JS
 else
   cat > "$INSTALL_DIR/.env" <<EOF
 # GYDS rig program settings — keep this file private
@@ -66,12 +117,24 @@ EOF
 fi
 chmod 600 "$INSTALL_DIR/.env"
 
+if [ "$MINING_SOFTWARE" = xmrig ]; then
+  TEMP_MINER="$(mktemp)"
+  curl -fsSL "$DASHBOARD_URL/rig-agent/install-miner.sh" -o "$TEMP_MINER"
+  INSTALL_DIR="$INSTALL_DIR" bash "$TEMP_MINER"
+  rm -f "$TEMP_MINER"
+  # Paths are restricted above, so replacement is safe.
+  if grep -q '^XMRIG_PATH=' "$INSTALL_DIR/.env"; then
+    sed -i.bak "s|^XMRIG_PATH=.*|XMRIG_PATH=$INSTALL_DIR/bin/xmrig|" "$INSTALL_DIR/.env"
+    rm -f "$INSTALL_DIR/.env.bak"
+  else printf '\nXMRIG_PATH=%s/bin/xmrig\n' "$INSTALL_DIR" >> "$INSTALL_DIR/.env"; fi
+fi
+
 # Restart-forever wrapper used where no service manager exists.
 cat > "$INSTALL_DIR/run.sh" <<EOF
 #!/usr/bin/env bash
 cd "$INSTALL_DIR"
 while true; do
-  "$NODE_BIN" agent.mjs >> "$INSTALL_DIR/rig.log" 2>&1
+  "$NODE_BIN" "$INSTALL_DIR/agent.mjs" >> "$INSTALL_DIR/rig.log" 2>&1
   sleep 3
 done
 EOF
@@ -85,6 +148,7 @@ if [ "$IS_TERMUX" = 1 ]; then
   chmod +x "$HOME/.termux/boot/gyds-rig"
   command -v termux-wake-lock >/dev/null && termux-wake-lock || true
   pkill -f "$INSTALL_DIR/run.sh" 2>/dev/null || true
+  pkill -f "$NODE_BIN $INSTALL_DIR/agent.mjs" 2>/dev/null || true
   nohup "$INSTALL_DIR/run.sh" >/dev/null 2>&1 &
 elif [ "$(uname)" = "Darwin" ]; then
   PLIST="$HOME/Library/LaunchAgents/com.gyds.rig.plist"
@@ -106,9 +170,8 @@ EOF
   launchctl load "$PLIST"
   say "Installed as a login service (com.gyds.rig)."
 elif command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
-  SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"
   RUN_USER="$(id -un)"; [ "${RUN_AS_ROOT:-0}" = 1 ] && RUN_USER=root
-  $SUDO tee /etc/systemd/system/gyds-rig.service >/dev/null <<EOF
+  "${SUDO[@]}" tee /etc/systemd/system/gyds-rig.service >/dev/null <<EOF
 [Unit]
 Description=GYDS rig program
 After=network-online.target
@@ -125,15 +188,20 @@ Nice=10
 [Install]
 WantedBy=multi-user.target
 EOF
-  $SUDO systemctl daemon-reload
-  $SUDO systemctl enable --now gyds-rig
-  $SUDO systemctl restart gyds-rig
+  "${SUDO[@]}" systemctl daemon-reload
+  "${SUDO[@]}" systemctl enable --now gyds-rig
+  "${SUDO[@]}" systemctl restart gyds-rig
   say "Installed as a system service. Logs: journalctl -u gyds-rig -f"
 else
   pkill -f "$INSTALL_DIR/run.sh" 2>/dev/null || true
+  pkill -f "$NODE_BIN $INSTALL_DIR/agent.mjs" 2>/dev/null || true
   nohup "$INSTALL_DIR/run.sh" >/dev/null 2>&1 &
-  ( crontab -l 2>/dev/null | grep -v gyds-rig; echo "@reboot $INSTALL_DIR/run.sh # gyds-rig" ) | crontab - 2>/dev/null || true
+  if command -v crontab >/dev/null; then
+    { crontab -l 2>/dev/null | grep -v ' # gyds-rig$' || true; printf '@reboot %s/run.sh # gyds-rig\n' "$INSTALL_DIR"; } | crontab - || die "Could not register reboot startup."
+    if command -v rc-service >/dev/null; then "${SUDO[@]}" rc-update add dcron default; "${SUDO[@]}" rc-service dcron start; fi
+  else die "No service manager or crontab. Background process started, but boot startup is not configured."; fi
   say "Started in the background (restarts on reboot via cron). Logs: $INSTALL_DIR/rig.log"
 fi
 
-say "Done. Your rig should appear online on the dashboard within ~15 seconds."
+say "Service registered. Check the dashboard for an online check-in; select a profile and press Start to mine."
+say "GYDS is built in; XMRig is optional. Other coins require compatible miners, drivers or ASIC hardware. No GPU drivers or overclock settings were changed."

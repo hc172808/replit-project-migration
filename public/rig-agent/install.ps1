@@ -14,19 +14,31 @@ $Dir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:USERPROF
 function Say($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 
 $node = Get-Command node -ErrorAction SilentlyContinue
+$Mode = if ($env:SETUP_MODE) { $env:SETUP_MODE } else { "miner-only" }
+if ($Mode -ne "miner-only") { throw "Use the server dashboard installer on Ubuntu/Debian or Fedora first, then Add rig. Windows setup is miner-only." }
+if ($Dashboard -notmatch '^https://') { throw "Use the published https:// dashboard address." }
+if ($env:RIG_TOKEN -notmatch '^rig_[a-fA-F0-9]{64}$') { throw "Use the token from Add rig." }
+if ($RigName -match '[\r\n]') { throw "Rig name must be one line." }
 $needNode = -not $node
-if ($node) { $needNode = [int]((& node -p "process.versions.node.split('.')[0]")) -lt 18 }
+if ($node) { $needNode = [int]((& node -p "process.versions.node.split('.')[0]")) -lt 22 }
 if ($needNode) {
   Say "Installing Node.js LTS…"
+  if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw "Install Microsoft App Installer (winget) or Node.js 22+ first." }
   winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+  if ($LASTEXITCODE -ne 0) { throw "Node.js installation failed. Install Node.js 22+ and rerun." }
   $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
   $node = Get-Command node
 }
 $NodeBin = $node.Source
+if ([int]((& $NodeBin -p "process.versions.node.split('.')[0]")) -lt 22) { throw "Node.js 22+ is required." }
 
 Say "Installing into $Dir"
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null
-Invoke-WebRequest -UseBasicParsing "$Dashboard/rig-agent/agent.mjs" -OutFile (Join-Path $Dir "agent.mjs")
+$Download = Join-Path $Dir "agent-download.mjs"
+Invoke-WebRequest -UseBasicParsing "$Dashboard/rig-agent/agent.mjs" -OutFile $Download
+& $NodeBin --check $Download
+if ($LASTEXITCODE -ne 0) { Remove-Item $Download; throw "Downloaded rig program did not pass validation." }
+Move-Item -Force $Download (Join-Path $Dir "agent.mjs")
 
 $envFile = Join-Path $Dir ".env"
 if (Test-Path $envFile) {
@@ -73,5 +85,6 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Keeps the GYDS rig program running" | Out-Null
 Start-ScheduledTask -TaskName $taskName
 
-Say "Done. The rig starts at logon and restarts itself. It should appear on the dashboard within ~15 seconds."
+Say "Task registered. Confirm the rig is online in your dashboard; select a profile and press Start to mine."
+Say "GYDS is built in. Other coins require separately installed Windows miners and compatible GPU drivers or ASIC hardware."
 Say "Logs: $Dir\rig.log"

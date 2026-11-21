@@ -12,6 +12,8 @@
 ## Project rules
 - Browser mining runs only in the signed-in user's tab via Web Workers, explicitly started by the user; never run mining on Lovable hosting because it cannot host long CPU jobs.
 - The separately installed rig agent runs on owner-controlled hardware and persists the desired mining state through dashboard outages and service restarts so it keeps mining until Stop.
+- Separate dashboard hosting uses the existing Node-server output and an owner-managed systemd service behind HTTPS; database credentials and schema setup must be supplied separately because managed Cloud secrets cannot be exported.
+- Rig installers install runtime prerequisites and optionally build a pinned XMRig release; GPU/ASIC programs and vendor drivers require owner-selected compatible packages to avoid unsafe automatic hardware changes.
 - Rig updates use a durable local event journal acknowledged by the heartbeat and owner-readable history; success is reported after replacement startup to avoid false installation claims.
 - The PWA service worker is online-only and never caches pages or API responses to avoid persisting private rig data or stale releases.
 - Wallet challenges are bound to the requesting host and issued message, and consumed atomically after signature verification to prevent replay and concurrent sign-ins.

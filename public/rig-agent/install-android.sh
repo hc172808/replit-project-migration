@@ -6,8 +6,9 @@ if [[ "${PREFIX:-}" != *com.termux* ]]; then
 fi
 : "${DASHBOARD_URL:?Set DASHBOARD_URL from your rig setup screen}"
 : "${RIG_TOKEN:?Set RIG_TOKEN from your rig setup screen}"
-pkg install -y nodejs-lts curl bash
+pkg update -y
+pkg install -y nodejs-lts curl bash ca-certificates
 TEMP_SCRIPT="$(mktemp)"
 trap 'rm -f "$TEMP_SCRIPT"' EXIT
-curl -fsSL "${DASHBOARD_URL%/}/rig-agent/install.sh" -o "$TEMP_SCRIPT"
+curl -fsSL "${DASHBOARD_URL%/}/rig-agent/setup.sh" -o "$TEMP_SCRIPT"
 bash "$TEMP_SCRIPT"

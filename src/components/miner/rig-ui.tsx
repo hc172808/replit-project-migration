@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { clampTuning, isRigOnline, TUNING_LIMITS, type Tuning } from "@/lib/assets";
@@ -173,10 +174,45 @@ function CopyBlock({ text }: { text: string }) {
 }
 
 export function SetupInstructions({ token, name }: { token: string; name: string }) {
+  const [mode, setMode] = useState("miner-only");
+  const [software, setSoftware] = useState("builtin");
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const isPreview = origin.includes("id-preview--") || origin.includes("localhost");
+  const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const psQuote = (value: string) => `'${value.replaceAll("'", "''")}'`;
+  const settings = `DASHBOARD_URL=${shellQuote(origin)} RIG_TOKEN=${shellQuote(token)} RIG_NAME=${shellQuote(name)} SETUP_MODE=miner-only MINING_SOFTWARE=${software}`;
   return (
     <div className="space-y-4 text-sm">
+      <Tabs value={mode} onValueChange={setMode}>
+        <TabsList className="grid h-auto w-full grid-cols-2">
+          <TabsTrigger value="miner-only" className="whitespace-normal">Miner only</TabsTrigger>
+          <TabsTrigger value="dashboard-miner" className="whitespace-normal">Host dashboard + miner</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <p className="text-xs text-muted-foreground">
+        {mode === "miner-only" ? "Connects this miner to your existing dashboard without hosting another dashboard." : "First host a separate dashboard on your Ubuntu/Debian or Fedora server, then sign in there and Add rig to get its miner installation command."}
+        {" "}Add each device separately to control all your rigs from the same account.
+      </p>
+      {mode === "dashboard-miner" && (
+        <div className="space-y-2 border-l-2 border-signal pl-3">
+          <p className="font-semibold">Separate server dashboard</p>
+          <p className="text-xs text-muted-foreground">Requires your latest exported code repository, a domain pointing to the server, ports 80/443, administrator access and your own configured backend with private credentials. Managed Cloud credentials and existing accounts are not exported. Phones connect to this server; they do not host it.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm"><a href="/rig-agent/setup-dashboard-server.sh" download><Download /> Server script</a></Button>
+            <Button asChild variant="outline" size="sm"><a href="/rig-agent/dashboard.env.example" download><Download /> Configuration</a></Button>
+            <Button asChild variant="outline" size="sm"><a href="/rig-agent/README.md" download><Download /> Full requirements</a></Button>
+          </div>
+          <p className="text-xs text-warning">Complete the server setup first. The commands below connect to this dashboard, not a newly created one; get a new token from your own dashboard afterward.</p>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        <Label htmlFor="setup-software">Linux, macOS and Android mining software</Label>
+        <select id="setup-software" value={software} onChange={(e) => setSoftware(e.target.value)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+          <option value="builtin">GYDS — built-in CPU miner</option>
+          <option value="xmrig">Monero — install XMRig + build requirements</option>
+        </select>
+        <p className="text-xs text-muted-foreground">GPU coins and Bitcoin need separately installed compatible miners, drivers or ASIC hardware. Installation does not start mining.</p>
+      </div>
       {isPreview && (
         <p className="rounded-lg border border-warning/40 bg-inset p-3 text-xs text-warning">
           You're on the private preview address. Publish the app and use its public address below instead, or rigs won't be able to reach the dashboard.
@@ -184,24 +220,26 @@ export function SetupInstructions({ token, name }: { token: string; name: string
       )}
       <div className="space-y-2">
         <p className="font-semibold">Ubuntu, Debian, other Linux or macOS</p>
-        <CopyBlock text={`curl -fsSL ${origin}/rig-agent/install.sh | DASHBOARD_URL=${origin} RIG_TOKEN=${token} RIG_NAME="${name}" bash`} />
+        <CopyBlock text={`curl -fsSL ${shellQuote(`${origin}/rig-agent/setup.sh`)} -o gyds-setup.sh\n# Inspect gyds-setup.sh before running\n${settings} bash gyds-setup.sh`} />
+        <p className="text-xs text-muted-foreground">Installs Node.js 22+, certificates and hardware detection tools. Supports Ubuntu/Debian, Fedora/RHEL, Arch, Alpine and macOS with Homebrew. Administrator access is required for server packages and startup services.</p>
       </div>
       <div className="space-y-2">
         <p className="font-semibold">Android phone (Termux)</p>
         <p className="text-xs text-muted-foreground">Install Termux and Termux:Boot from F-Droid, open both once, then run this in Termux. Disable battery optimization for Termux; Android may still stop background work.</p>
-        <CopyBlock text={`pkg update && pkg install -y curl bash\ncurl -fsSL ${origin}/rig-agent/install-android.sh | DASHBOARD_URL=${origin} RIG_TOKEN=${token} bash`} />
+        <CopyBlock text={`pkg update && pkg install -y curl bash\ncurl -fsSL ${shellQuote(`${origin}/rig-agent/install-android.sh`)} -o gyds-android.sh\n# Inspect gyds-android.sh before running\n${settings} bash gyds-android.sh`} />
       </div>
       <p className="text-xs text-muted-foreground">iPhone and iPad can install the dashboard on their home screen and control rigs, but cannot run the background rig program.</p>
       <div className="space-y-2">
         <p className="font-semibold">Windows (PowerShell)</p>
-        <CopyBlock text={`$env:DASHBOARD_URL="${origin}"; $env:RIG_TOKEN="${token}"; $env:RIG_NAME="${name}"; iwr -useb ${origin}/rig-agent/install.ps1 | iex`} />
+        <CopyBlock text={`$env:DASHBOARD_URL=${psQuote(origin)}; $env:RIG_TOKEN=${psQuote(token)}; $env:RIG_NAME=${psQuote(name)}; $env:SETUP_MODE='miner-only'\nInvoke-WebRequest -UseBasicParsing ${psQuote(`${origin}/rig-agent/install.ps1`)} -OutFile gyds-install.ps1\n# Inspect gyds-install.ps1 before running\npowershell -ExecutionPolicy RemoteSigned -File .\\gyds-install.ps1`} />
+        <p className="text-xs text-muted-foreground">Requires Windows 10/11, PowerShell and winget if Node.js is missing. GYDS is built in; install Windows coin miners separately and set their paths in .env.</p>
       </div>
       <div className="space-y-2">
         <p className="font-semibold">Or create the .env file yourself</p>
         <CopyBlock text={envFileFor(origin, token, name)} />
       </div>
       <p className="text-xs text-muted-foreground">
-        The token is shown only once. The rig program finds this machine's CPUs and GPUs and reports them to the dashboard. It needs Node.js 18 or newer.
+        The token is shown only once. Keep it private. The rig detects CPUs and supported GPUs, checks in with the dashboard, and waits for Start. A pool or node and wallet are required; protected GYDS nodes also require your access credentials in Node endpoints.
       </p>
     </div>
   );

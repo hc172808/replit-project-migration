@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Open
+- [ ] Finish miner-only and dashboard-plus-miner setup with server/Android prerequisites and installation checks
+- [ ] Add separate server-hosted dashboard installation and documented backend credential prerequisites (user chose own-server hosting)
 - [ ] Add owner-only rig error-log submission with AI causes and troubleshooting steps
 - [ ] Finish username/wallet sign-in, automated tests, and signed-in dashboard verification
 - [ ] Validate per-rig/app updates, rig health, and phone installation
