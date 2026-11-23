@@ -1,5 +1,10 @@
 # Replit setup
 
+For an owner-managed Ubuntu or other Linux server, use `bash deploy.sh`.
+See [self-hosting instructions](docs/self-hosting.md) for prerequisites,
+environment settings, systemd, updates, and HTTPS setup. This is separate from
+the Replit workflow and does not install or run a mining rig.
+
 ## Run the app
 
 Use the Replit **Start application** workflow to run the Vite development
