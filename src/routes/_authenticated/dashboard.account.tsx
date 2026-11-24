@@ -45,6 +45,9 @@ function Account() {
         <Button asChild variant="secondary"><Link to="/install"><Smartphone /> Install on your phone</Link></Button>
         <Button variant="outline" onClick={signOut}><LogOut /> Sign out</Button>
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        This browser signs out after 15 minutes without activity. Activity in another open dashboard tab keeps the session active.
+      </p>
     </Section>
   );
 }
