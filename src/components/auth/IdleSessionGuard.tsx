@@ -5,7 +5,11 @@ import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { useBrowserRig } from "@/components/miner/browser-rig";
 import { supabase } from "@/integrations/supabase/client";
-import { IDLE_SESSION_TIMEOUT_MS, watchIdleSession } from "@/lib/idle-session";
+import {
+  IDLE_SESSION_TIMEOUT_MS,
+  subscribeIdleLockPreference,
+  watchIdleSession,
+} from "@/lib/idle-session";
 
 type IdleSessionGuardProps = {
   userId: string;
@@ -18,6 +22,7 @@ export function IdleSessionGuard({ userId, children }: IdleSessionGuardProps) {
   const { state: browserRigState, run: runBrowserRig } = useBrowserRig();
   const [locked, setLocked] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
+  const [autoLockEnabled, setAutoLockEnabled] = useState(true);
   const locking = useRef(false);
 
   const lockSession = useCallback(async () => {
@@ -62,12 +67,19 @@ export function IdleSessionGuard({ userId, children }: IdleSessionGuardProps) {
   }, [lockSession]);
 
   useEffect(
-    () =>
-      watchIdleSession({
+    () => subscribeIdleLockPreference(userId, setAutoLockEnabled),
+    [userId],
+  );
+
+  useEffect(
+    () => {
+      if (!autoLockEnabled) return;
+      return watchIdleSession({
         userId,
         onIdle: () => void lockSessionRef.current(),
-      }),
-    [userId],
+      });
+    },
+    [autoLockEnabled, userId],
   );
 
   if (locked) {

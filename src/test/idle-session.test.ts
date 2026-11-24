@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   idleActivityStorageKey,
+  idleLockPreferenceKey,
   IDLE_SESSION_TIMEOUT_MS,
+  readIdleLockEnabled,
+  saveIdleLockEnabled,
+  subscribeIdleLockPreference,
   watchIdleSession,
 } from "@/lib/idle-session";
 
@@ -70,5 +74,31 @@ describe("idle session timeout", () => {
     vi.advanceTimersByTime(1);
     expect(onIdle).toHaveBeenCalledOnce();
     stop();
+  });
+
+  it("saves the automatic-lock choice for this browser and syncs it immediately", () => {
+    const userId = "user-1";
+    const changes = vi.fn();
+    const unsubscribe = subscribeIdleLockPreference(userId, changes);
+
+    expect(readIdleLockEnabled(userId)).toBe(true);
+    saveIdleLockEnabled(userId, false);
+    expect(localStorage.getItem(idleLockPreferenceKey(userId))).toBe("disabled");
+    expect(readIdleLockEnabled(userId)).toBe(false);
+    expect(changes).toHaveBeenLastCalledWith(false);
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: idleLockPreferenceKey(userId),
+        newValue: null,
+      }),
+    );
+    expect(changes).toHaveBeenLastCalledWith(true);
+
+    saveIdleLockEnabled(userId, true);
+    expect(localStorage.getItem(idleLockPreferenceKey(userId))).toBeNull();
+    expect(readIdleLockEnabled(userId)).toBe(true);
+    expect(changes).toHaveBeenLastCalledWith(true);
+    unsubscribe();
   });
 });

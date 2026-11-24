@@ -1,7 +1,53 @@
 export const IDLE_SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+export const IDLE_LOCK_PREFERENCE_EVENT = "gyds:auto-lock-preference";
 
 export function idleActivityStorageKey(userId: string) {
   return `gyds:last-activity:${userId}`;
+}
+
+export function idleLockPreferenceKey(userId: string) {
+  return `gyds:auto-lock:${userId}`;
+}
+
+export function readIdleLockEnabled(userId: string): boolean {
+  try {
+    return window.localStorage.getItem(idleLockPreferenceKey(userId)) !== "disabled";
+  } catch {
+    return true;
+  }
+}
+
+export function saveIdleLockEnabled(userId: string, enabled: boolean) {
+  const key = idleLockPreferenceKey(userId);
+  if (enabled) window.localStorage.removeItem(key);
+  else window.localStorage.setItem(key, "disabled");
+
+  window.dispatchEvent(
+    new CustomEvent(IDLE_LOCK_PREFERENCE_EVENT, { detail: { userId, enabled } }),
+  );
+}
+
+export function subscribeIdleLockPreference(
+  userId: string,
+  onChange: (enabled: boolean) => void,
+): () => void {
+  const key = idleLockPreferenceKey(userId);
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === key) onChange(event.newValue !== "disabled");
+  };
+  const onPreferenceChange = (event: Event) => {
+    const detail = (event as CustomEvent<{ userId: string; enabled: boolean }>).detail;
+    if (detail?.userId === userId) onChange(detail.enabled);
+  };
+
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(IDLE_LOCK_PREFERENCE_EVENT, onPreferenceChange);
+  onChange(readIdleLockEnabled(userId));
+
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(IDLE_LOCK_PREFERENCE_EVENT, onPreferenceChange);
+  };
 }
 
 type IdleSessionOptions = {
