@@ -1,155 +1,265 @@
 #!/usr/bin/env bash
-# Self-host the dashboard; this does not install or start a mining rig.
+# Bootstrap the dashboard server. This never installs or starts mining software.
 set -Eeuo pipefail
 umask 077
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPT_PATH="$ROOT/deploy.sh"
 SERVICE=gyds-dashboard
+SERVICE_USER=gyds-dashboard
 PORT=5000
 HOST=127.0.0.1
-INSTALL_DEPS=0
-BUILD_ONLY=0
+INSTALL_ROOT=/opt/gyds-dashboard
+CONFIG_DIR=/etc/gyds-dashboard
+CONFIG_FILE="$CONFIG_DIR/dashboard.env"
+STATE_DIR=/var/lib/gyds-dashboard
 TEMP_DIR=
+RELEASE_DIR=
+ORIGINAL_ARGS=("$@")
 
 usage() {
   cat <<'EOF'
-Usage: bash deploy.sh [options]
+Usage: ./deploy.sh [options]
 
-Run as the non-root Linux account that owns this checkout.
-  --install-deps       Install build tools and, if needed, verified Node.js 22
-                      (apt, dnf, yum, pacman or zypper; requires sudo)
-  --build-only         Build without installing/restarting a systemd service
-  --service NAME       Service name (default: gyds-dashboard)
-  --port PORT          Unprivileged listening port (default: 5000)
-  --host ADDRESS       Bind address (default: 127.0.0.1; use a reverse proxy)
-  -h, --help           Show this help
+Run once from the project checkout. The script requests administrator access,
+installs prerequisites, creates a non-login service account, builds the app,
+and installs/restarts its systemd service.
 
-First copy .env.example to .env and supply your own Supabase settings.
-Re-run after pulling updates. A successful deployment restarts the service.
-No database migrations, firewall, TLS, DNS or mining setup are performed.
+  --service NAME       systemd service name (default: gyds-dashboard)
+  --service-user NAME  locked-down Linux account (default: gyds-dashboard)
+  --port PORT          local listening port (default: 5000)
+  --host ADDRESS       bind address (default: 127.0.0.1; keep behind HTTPS proxy)
+  --install-deps       accepted for compatibility; dependencies are automatic
+  -h, --help           show this help
+
+An existing valid .env is copied to /etc/gyds-dashboard/dashboard.env.
+Otherwise, the script securely prompts for credentials for an existing Supabase
+project. It cannot create that project, its schema, DNS, TLS certificates, or
+firewall rules. It does not install a mining rig.
 EOF
 }
 
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 need_value() { [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || die "$1 requires a value"; }
-cleanup() { [[ -z "$TEMP_DIR" ]] || rm -rf -- "$TEMP_DIR"; }
+cleanup() {
+  [[ -z "$TEMP_DIR" ]] || rm -rf -- "$TEMP_DIR"
+  if [[ -n "$RELEASE_DIR" && -d "$RELEASE_DIR" ]]; then
+    rm -rf -- "$RELEASE_DIR"
+  fi
+}
 trap cleanup EXIT
-trap 'printf "Deployment failed at line %s. No success was recorded.\n" "$LINENO" >&2' ERR
+trap 'printf "Deployment failed at line %s. The previous release was left in place if its build had not completed.\n" "$LINENO" >&2' ERR
 
 while (($#)); do
   case "$1" in
-    --install-deps) INSTALL_DEPS=1; shift ;;
-    --build-only) BUILD_ONLY=1; shift ;;
     --service) need_value "$@"; SERVICE="$2"; shift 2 ;;
+    --service-user) need_value "$@"; SERVICE_USER="$2"; shift 2 ;;
     --port) need_value "$@"; PORT="$2"; shift 2 ;;
     --host) need_value "$@"; HOST="$2"; shift 2 ;;
+    --install-deps) shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown option: $1 (see --help)" ;;
   esac
 done
 
 [[ "$(uname -s)" == Linux ]] || die "Linux is required."
-[[ "$EUID" -ne 0 ]] || die "Run as a non-root checkout owner, not sudo bash deploy.sh."
 [[ "$SERVICE" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$ ]] || die "Invalid service name."
+[[ "$SERVICE_USER" =~ ^[a-z_][a-z0-9_-]{0,30}[$]?$ ]] || die "Invalid service account name."
 [[ "$PORT" =~ ^[0-9]{4,5}$ ]] || die "Port must be between 1024 and 65535."
 PORT=$((10#$PORT))
 ((PORT >= 1024 && PORT <= 65535)) || die "Port must be between 1024 and 65535."
 [[ "$HOST" =~ ^[a-zA-Z0-9.:_-]+$ ]] || die "Invalid bind address."
-# Keep systemd paths literal; reject its expansion and quoting characters.
-[[ "$ROOT" =~ ^/[a-zA-Z0-9/._-]+$ ]] || die "Checkout path must contain only letters, numbers, /, ., _ and -."
-cd "$ROOT"
-[[ -f package.json && -f .env.example ]] || die "Run from a complete project checkout."
-[[ -O "$ROOT" ]] || die "The current account must own the checkout."
-if [[ ! -f .env ]]; then
-  cp .env.example .env
-  chmod 600 .env
-  die "Created .env from the template. Edit it with your Supabase settings, then run again."
-fi
-[[ -O .env ]] || die "The current account must own .env."
-chmod 600 .env
+[[ -f "$ROOT/package.json" && -f "$ROOT/.env.example" ]] || die "Run this script from a complete project checkout."
 
-if (( ! BUILD_ONLY )); then
-  [[ -d /run/systemd/system ]] || die "systemd is required for service installation; use --build-only otherwise."
-  command -v sudo >/dev/null || die "sudo is required for service installation."
-  sudo -v
+if (( EUID != 0 )); then
+  command -v sudo >/dev/null || die "Administrator access is required. Install sudo or run sudo bash deploy.sh."
+  printf 'Requesting administrator access to install the dashboard service.\n'
+  exec sudo -- bash "$SCRIPT_PATH" "${ORIGINAL_ARGS[@]}"
 fi
 
-if (( INSTALL_DEPS )); then
-  command -v sudo >/dev/null || die "Install sudo first, or install prerequisites manually."
+[[ -d /run/systemd/system ]] || die "A running systemd server is required."
+command -v systemctl >/dev/null || die "systemctl is unavailable."
+
+install_os_dependencies() {
   if command -v apt-get >/dev/null; then
-    sudo apt-get update
-    sudo apt-get install -y ca-certificates curl xz-utils tar build-essential python3
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+      ca-certificates curl xz-utils tar build-essential python3 npm passwd util-linux gawk
   elif command -v dnf >/dev/null; then
-    sudo dnf install -y ca-certificates curl xz tar gcc gcc-c++ make python3
+    dnf install -y ca-certificates curl xz tar gcc gcc-c++ make python3 npm shadow-utils util-linux gawk
   elif command -v yum >/dev/null; then
-    sudo yum install -y ca-certificates curl xz tar gcc gcc-c++ make python3
+    yum install -y ca-certificates curl xz tar gcc gcc-c++ make python3 npm shadow-utils util-linux gawk
   elif command -v pacman >/dev/null; then
-    sudo pacman -S --needed --noconfirm ca-certificates curl xz tar base-devel python
+    pacman -S --needed --noconfirm ca-certificates curl xz tar base-devel python npm shadow util-linux gawk
   elif command -v zypper >/dev/null; then
-    sudo zypper --non-interactive install ca-certificates curl xz tar gcc gcc-c++ make python3
+    zypper --non-interactive install ca-certificates curl xz tar gcc gcc-c++ make python3 npm shadow util-linux gawk
   else
-    die "Unsupported package manager. Install Node.js 22+, npm, curl and build tools manually."
+    die "Unsupported package manager. Supported: apt, dnf, yum, pacman, and zypper."
   fi
-fi
-
-export PATH="$HOME/.local/share/gyds-node/bin:$PATH"
-node_ok() {
-  command -v node >/dev/null && node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)'
 }
-if ! node_ok; then
-  (( INSTALL_DEPS )) || die "Node.js 22+ is required. Install it or use --install-deps."
+
+install_os_dependencies
+install -d -o root -g root -m 755 "$INSTALL_ROOT" "$INSTALL_ROOT/releases"
+
+node_version_ok() {
+  "$1" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' >/dev/null 2>&1
+}
+
+NODE="$(command -v node || true)"
+if [[ -z "$NODE" ]] || ! node_version_ok "$NODE"; then
   case "$(uname -m)" in
     x86_64) ARCH=x64 ;;
     aarch64|arm64) ARCH=arm64 ;;
-    *) die "Automatic Node installation supports x86_64 and arm64. Install Node.js 22+ manually." ;;
+    *) die "Automatic Node.js installation supports x86_64 and arm64; install Node.js 22+ manually on this architecture." ;;
   esac
-  command -v sha256sum >/dev/null || die "sha256sum is required."
+  command -v sha256sum >/dev/null || die "sha256sum is required to verify the Node.js download."
   TEMP_DIR="$(mktemp -d)"
-  # Download official binaries over HTTPS and verify before extraction.
-  BASE=https://nodejs.org/dist/latest-v22.x
-  curl --fail --show-error --silent --location "$BASE/SHASUMS256.txt" -o "$TEMP_DIR/SHASUMS256.txt"
-  ARCHIVE="$(awk -v suffix="-linux-$ARCH.tar.xz" '$2 ~ ("^node-v22\\.[0-9]+\\.[0-9]+" suffix "$") {print $2}' "$TEMP_DIR/SHASUMS256.txt")"
-  [[ "$ARCHIVE" =~ ^node-v22\.[0-9]+\.[0-9]+-linux-(x64|arm64)\.tar\.xz$ ]] || die "Could not resolve the official Node archive."
-  curl --fail --show-error --silent --location "$BASE/$ARCHIVE" -o "$TEMP_DIR/$ARCHIVE"
-  (cd "$TEMP_DIR"; grep "  $ARCHIVE\$" SHASUMS256.txt | sha256sum --check --status)
-  mkdir -p "$HOME/.local/share/gyds-node"
-  tar -xJf "$TEMP_DIR/$ARCHIVE" --strip-components=1 -C "$HOME/.local/share/gyds-node"
+  NODE_BASE=https://nodejs.org/dist/latest-v22.x
+  curl --fail --show-error --silent --location "$NODE_BASE/SHASUMS256.txt" -o "$TEMP_DIR/SHASUMS256.txt"
+  NODE_ARCHIVE="$(awk -v suffix="-linux-$ARCH.tar.xz" '$2 ~ ("^node-v22\\.[0-9]+\\.[0-9]+" suffix "$") {print $2}' "$TEMP_DIR/SHASUMS256.txt")"
+  [[ "$NODE_ARCHIVE" =~ ^node-v22\.[0-9]+\.[0-9]+-linux-(x64|arm64)\.tar\.xz$ ]] || die "Could not resolve the official Node.js 22 archive."
+  curl --fail --show-error --silent --location "$NODE_BASE/$NODE_ARCHIVE" -o "$TEMP_DIR/$NODE_ARCHIVE"
+  (cd "$TEMP_DIR"; grep "  $NODE_ARCHIVE\$" SHASUMS256.txt | sha256sum --check --status)
+  mkdir -p "$TEMP_DIR/node"
+  tar -xJf "$TEMP_DIR/$NODE_ARCHIVE" --strip-components=1 -C "$TEMP_DIR/node"
+  rm -rf "$INSTALL_ROOT/node22"
+  mv "$TEMP_DIR/node" "$INSTALL_ROOT/node22"
+  NODE="$INSTALL_ROOT/node22/bin/node"
 fi
-node_ok || die "Node.js 22+ failed to start; this server may be incompatible with the official Linux binaries."
-command -v npm >/dev/null || die "npm is required."
-command -v curl >/dev/null || die "curl is required (or use --install-deps)."
-NODE="$(command -v node)"
-[[ "$NODE" =~ ^/[a-zA-Z0-9/._-]+$ ]] || die "Node executable must have a simple absolute path."
+node_version_ok "$NODE" || die "Node.js 22+ is required."
+NODE="$(readlink -f "$NODE")"
+[[ "$NODE" =~ ^/[a-zA-Z0-9/._+-]+$ ]] || die "Node.js path must not contain spaces or systemd-special characters."
+NODE_BIN="$(dirname "$NODE")"
+export PATH="$NODE_BIN:/usr/local/bin:/usr/bin:/bin"
+command -v npm >/dev/null || die "npm was not installed with the system prerequisites."
 
-# Parse dotenv with Node, never source/execute user-supplied configuration.
-# Also pass VITE_ values to the build and all values to the production server.
-"$NODE" --env-file=.env --input-type=module -e '
-const required = ["VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY",
-  "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
-const missing = required.filter(key => !process.env[key] ||
-  /your-project|sb_publishable_xxx/.test(process.env[key]));
-if (missing.length) {
-  console.error("Set real values in .env for: " + missing.join(", "));
+if ! getent passwd "$SERVICE_USER" >/dev/null; then
+  NOLOGIN="$(command -v nologin || true)"
+  [[ -n "$NOLOGIN" ]] || NOLOGIN=/usr/sbin/nologin
+  useradd --system --user-group --home-dir "$STATE_DIR" --create-home --shell "$NOLOGIN" "$SERVICE_USER"
+else
+  SERVICE_SHELL="$(getent passwd "$SERVICE_USER" | awk -F: '{print $7}')"
+  [[ "$SERVICE_SHELL" == */nologin || "$SERVICE_SHELL" == */false ]] ||
+    die "Account '$SERVICE_USER' already exists with an interactive shell; choose another --service-user."
+fi
+SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
+install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 750 "$STATE_DIR"
+install -d -o root -g "$SERVICE_GROUP" -m 750 "$CONFIG_DIR"
+
+validate_env() {
+  env -i PATH="$PATH" "$NODE" --env-file="$1" --input-type=module -e '
+const required = [
+  "VITE_SUPABASE_URL",
+  "VITE_SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_URL",
+  "SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY"
+];
+const missing = required.filter((key) => {
+  const value = process.env[key]?.trim();
+  return !value || /your-project|sb_publishable_xxx/i.test(value);
+});
+if (missing.length) process.exit(1);
+try {
+  new URL(process.env.SUPABASE_URL);
+  new URL(process.env.VITE_SUPABASE_URL);
+} catch {
   process.exit(1);
 }
-'
+' >/dev/null 2>&1
+}
 
-if [[ -f package-lock.json ]]; then
-  npm ci --include=dev
-elif [[ -f bun.lock ]] && command -v bun >/dev/null; then
-  bun install --frozen-lockfile
+write_env_value() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"' "$value"
+}
+
+prompt_for_supabase() {
+  [[ -t 0 ]] || die "A valid Supabase project is required. Create $CONFIG_FILE with the settings in .env.example, then rerun."
+  printf '\nThis dashboard needs an existing Supabase project; this script cannot create cloud credentials or its database.\n'
+  while true; do
+    local supabase_url publishable_key service_role_key candidate
+    read -r -p "Supabase project URL: " supabase_url
+    read -r -p "Supabase publishable/anon key: " publishable_key
+    read -r -s -p "Supabase service-role/secret key (hidden): " service_role_key
+    printf '\n'
+    [[ -n "$supabase_url" && -n "$publishable_key" && -n "$service_role_key" ]] ||
+      { printf 'All three Supabase values are required.\n'; continue; }
+
+    candidate="$(mktemp "$CONFIG_DIR/.dashboard.env.XXXXXX")"
+    {
+      printf 'VITE_SUPABASE_URL=%s\n' "$(write_env_value "$supabase_url")"
+      printf 'SUPABASE_URL=%s\n' "$(write_env_value "$supabase_url")"
+      printf 'VITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$(write_env_value "$publishable_key")"
+      printf 'SUPABASE_PUBLISHABLE_KEY=%s\n' "$(write_env_value "$publishable_key")"
+      printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$(write_env_value "$service_role_key")"
+    } > "$candidate"
+    chmod 640 "$candidate"
+    chown "root:$SERVICE_GROUP" "$candidate"
+    unset service_role_key
+
+    if validate_env "$candidate"; then
+      mv -f "$candidate" "$CONFIG_FILE"
+      chmod 640 "$CONFIG_FILE"
+      chown "root:$SERVICE_GROUP" "$CONFIG_FILE"
+      break
+    fi
+    rm -f "$candidate"
+    printf 'Those values were not accepted. Check them and try again.\n'
+  done
+  unset supabase_url publishable_key
+}
+
+if [[ -f "$CONFIG_FILE" ]]; then
+  validate_env "$CONFIG_FILE" || die "$CONFIG_FILE is incomplete or invalid; it was left unchanged."
+  chmod 640 "$CONFIG_FILE"
+  chown "root:$SERVICE_GROUP" "$CONFIG_FILE"
+elif [[ -f "$ROOT/.env" ]] && validate_env "$ROOT/.env"; then
+  install -o root -g "$SERVICE_GROUP" -m 640 "$ROOT/.env" "$CONFIG_FILE"
+  if command -v git >/dev/null && git -C "$ROOT" ls-files --error-unmatch .env >/dev/null 2>&1; then
+    printf 'Warning: this checkout tracks .env in Git. Rotate any credentials that were committed.\n' >&2
+  fi
 else
-  printf 'No npm lockfile/Bun runtime found; installing package.json ranges without creating a new lockfile.\n'
-  npm install --include=dev --package-lock=false
-fi
-"$NODE" --env-file=.env ./node_modules/vite/bin/vite.js build
-[[ -f .output/server/index.mjs ]] || die "Build did not produce the expected Node server."
-if (( BUILD_ONLY )); then
-  printf 'Build succeeded. Start with: node --env-file=.env .output/server/index.mjs\n'
-  exit 0
+  prompt_for_supabase
 fi
 
-TEMP_DIR="${TEMP_DIR:-$(mktemp -d)}"
+RELEASE_ID="$(date -u +%Y%m%d%H%M%S)-$$"
+RELEASE_DIR="$INSTALL_ROOT/releases/$RELEASE_ID"
+install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 750 "$RELEASE_DIR"
+tar \
+  --exclude='./.git' \
+  --exclude='./.env' \
+  --exclude='./node_modules' \
+  --exclude='./.output' \
+  --exclude='./.cache' \
+  --exclude='./.local' \
+  --exclude='./.agents' \
+  --exclude='./dist' \
+  -cf - -C "$ROOT" . | tar -xf - -C "$RELEASE_DIR"
+chown -R "$SERVICE_USER:$SERVICE_GROUP" "$RELEASE_DIR"
+
+run_as_service() {
+  local directory="$1"
+  shift
+  runuser -u "$SERVICE_USER" -- env HOME="$STATE_DIR" PATH="$NODE_BIN:/usr/local/bin:/usr/bin:/bin" \
+    bash -c 'cd "$1" && shift && exec "$@"' bash "$directory" "$@"
+}
+
+if [[ -f "$RELEASE_DIR/package-lock.json" ]]; then
+  run_as_service "$RELEASE_DIR" npm ci --include=dev
+else
+  printf 'Installing project dependencies with npm. The repository has no npm lockfile.\n'
+  run_as_service "$RELEASE_DIR" npm install --include=dev --package-lock=false
+fi
+run_as_service "$RELEASE_DIR" npm test
+run_as_service "$RELEASE_DIR" "$NODE" --env-file="$CONFIG_FILE" ./node_modules/vite/bin/vite.js build
+[[ -f "$RELEASE_DIR/.output/server/index.mjs" ]] || die "Build did not produce the expected Node server."
+chown -R "root:$SERVICE_GROUP" "$RELEASE_DIR"
+chmod -R g+rX "$RELEASE_DIR"
+
+TEMP_DIR="$(mktemp -d)"
 cat > "$TEMP_DIR/$SERVICE.service" <<EOF
 [Unit]
 Description=GYDS dashboard
@@ -160,41 +270,70 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-User=$(id -un)
-Group=$(id -gn)
-WorkingDirectory=$ROOT
+User=$SERVICE_USER
+Group=$SERVICE_GROUP
+WorkingDirectory=$INSTALL_ROOT/current
+StateDirectory=gyds-dashboard
+StateDirectoryMode=0750
 Environment=NODE_ENV=production
 Environment=NITRO_HOST=$HOST
 Environment=NITRO_PORT=$PORT
 Environment=PORT=$PORT
-ExecStart=$NODE --env-file=$ROOT/.env $ROOT/.output/server/index.mjs
+ExecStart=$NODE --env-file=$CONFIG_FILE $INSTALL_ROOT/current/.output/server/index.mjs
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=full
+ProtectSystem=strict
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
 EOF
-printf 'Installing/replacing %s.service and restarting it on port %s.\n' "$SERVICE" "$PORT"
-sudo install -m 644 "$TEMP_DIR/$SERVICE.service" "/etc/systemd/system/$SERVICE.service"
-sudo systemctl daemon-reload
-sudo systemctl enable "$SERVICE.service"
-sudo systemctl restart "$SERVICE.service"
+install -m 644 "$TEMP_DIR/$SERVICE.service" "/etc/systemd/system/$SERVICE.service"
+systemctl daemon-reload
+systemctl enable "$SERVICE.service"
+
+PREVIOUS_RELEASE="$(readlink -f "$INSTALL_ROOT/current" 2>/dev/null || true)"
+NEXT_LINK="$INSTALL_ROOT/.current-$RELEASE_ID"
+ln -s "$RELEASE_DIR" "$NEXT_LINK"
+mv -Tf "$NEXT_LINK" "$INSTALL_ROOT/current"
+RELEASE_DIR=
+
+rollback_release() {
+  if [[ -n "$PREVIOUS_RELEASE" && -d "$PREVIOUS_RELEASE" ]]; then
+    ln -s "$PREVIOUS_RELEASE" "$NEXT_LINK"
+    mv -Tf "$NEXT_LINK" "$INSTALL_ROOT/current"
+    systemctl restart "$SERVICE.service" || true
+  else
+    systemctl stop "$SERVICE.service" || true
+  fi
+}
+
+if ! systemctl restart "$SERVICE.service"; then
+  rollback_release
+  die "The service failed to restart. Check: journalctl -u $SERVICE -n 100 --no-pager"
+fi
 
 CHECK_HOST="$HOST"
-case "$HOST" in 0.0.0.0) CHECK_HOST=127.0.0.1 ;; ::) CHECK_HOST='[::1]' ;; *:*) CHECK_HOST="[$HOST]" ;; esac
+case "$HOST" in
+  0.0.0.0) CHECK_HOST=127.0.0.1 ;;
+  ::) CHECK_HOST='[::1]' ;;
+  *:*) CHECK_HOST="[$HOST]" ;;
+esac
 for ((attempt=0; attempt<30; attempt++)); do
-  if sudo systemctl is-active --quiet "$SERVICE.service" &&
+  if systemctl is-active --quiet "$SERVICE.service" &&
     curl --fail --silent --max-time 2 --output /dev/null "http://$CHECK_HOST:$PORT/"; then
-    printf 'Deployment healthy at http://%s:%s/\n' "$CHECK_HOST" "$PORT"
-    printf 'Logs: sudo journalctl -u %s -f\n' "$SERVICE"
-    printf 'Use an HTTPS reverse proxy before exposing the dashboard publicly.\n'
+    printf '\nDashboard service is running as the locked-down Linux account %s.\n' "$SERVICE_USER"
+    printf 'Local health check passed: http://%s:%s/\n' "$CHECK_HOST" "$PORT"
+    printf 'Supabase configuration: %s\n' "$CONFIG_FILE"
+    printf 'Logs: journalctl -u %s -f\n' "$SERVICE"
+    printf 'The dashboard is loopback-only by default; HTTPS, DNS, and firewall rules are not changed.\n'
     exit 0
   fi
   sleep 2
 done
-die "Health check failed. Inspect: sudo journalctl -u $SERVICE -n 100 --no-pager"
+rollback_release
+die "Health check failed. Inspect: journalctl -u $SERVICE -n 100 --no-pager"

@@ -14,10 +14,12 @@ Continue developing this project in the [Lovable editor](https://lovable.dev/pro
 
 ## Self-host on Ubuntu or other Linux servers
 
-See [Linux deployment instructions](docs/self-hosting.md). After configuring
-your own `.env`, run `bash deploy.sh --install-deps` as a non-root user with sudo.
-The script builds the dashboard and runs it as a systemd service; it does not
-install or start mining software.
+See [Linux deployment instructions](docs/self-hosting.md). From the project
+checkout, run `bash deploy.sh` once as a user with sudo access. It installs
+prerequisites, creates a locked-down Linux service account, builds the dashboard,
+and installs a systemd service. It reuses valid Supabase settings or prompts for
+credentials for an existing Supabase project; it cannot create that project.
+The script does not install or start mining software.
 
 ## Local development
 
